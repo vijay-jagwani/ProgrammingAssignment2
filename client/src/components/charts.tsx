@@ -8,13 +8,17 @@ export interface Series {
   dashed?: boolean;
 }
 
-function niceTicks(max: number): number[] {
-  if (max <= 0) return [0, 1];
-  const raw = max / 3;
+function niceTicks(lo: number, hi: number): number[] {
+  if (hi <= lo) hi = lo + 1;
+  const raw = (hi - lo) / 3;
   const mag = 10 ** Math.floor(Math.log10(raw));
   const step = [1, 2, 5, 10].map((m) => m * mag).find((s) => s >= raw) ?? mag * 10;
+  const start = Math.floor(lo / step) * step;
   const ticks: number[] = [];
-  for (let v = 0; v <= max + step * 0.001; v += step) ticks.push(v);
+  for (let v = start; ; v += step) {
+    ticks.push(Math.round(v * 100) / 100);
+    if (v >= hi) break;
+  }
   return ticks;
 }
 
@@ -33,12 +37,12 @@ export function LineChart({
   const padT = 10;
   const padB = 22;
   const all = series.flatMap((s) => s.values.filter((v): v is number => v != null));
-  const maxV = Math.max(1, ...all);
-  const ticks = niceTicks(maxV);
+  const ticks = niceTicks(Math.min(0, ...all), Math.max(1, ...all));
+  const bottom = ticks[0];
   const top = ticks[ticks.length - 1];
   const x = (i: number) =>
     padL + (labels.length <= 1 ? 0 : (i * (W - padL - padR)) / (labels.length - 1));
-  const y = (v: number) => padT + (H - padT - padB) * (1 - v / top);
+  const y = (v: number) => padT + (H - padT - padB) * (1 - (v - bottom) / (top - bottom));
 
   return (
     <div>
@@ -47,7 +51,7 @@ export function LineChart({
           <g key={t}>
             <line x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} stroke="var(--grid)" strokeWidth="1" />
             <text x={padL - 6} y={y(t) + 4} textAnchor="end" fontSize="10" fill="var(--ink-3)">
-              {t >= 1000 ? `${t / 1000}k` : t}
+              {Math.abs(t) >= 1000 ? `${t / 1000}k` : t}
             </text>
           </g>
         ))}
