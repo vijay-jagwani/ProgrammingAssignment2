@@ -8,7 +8,7 @@
     "client"
   ],
   "scripts": {
-    "dev": "concurrently -n api,web -c blue,green \"node scripts/dev-local.mjs\" \"npm run dev -w client\"",
+    "dev": "concurrently -n api,web -c blue,green \"tsx scripts/dev-local.ts\" \"npm run dev -w client\"",
     "build": "npm run build -w client",
     "test": "npm run test -w shared",
     "typecheck": "npm run typecheck -w shared && npm run typecheck -w client",

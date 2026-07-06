@@ -10,7 +10,7 @@ import {
   reduce,
   referenceCost,
   viewFor,
-} from '../src/index.js';
+} from '../src/index.ts';
 
 /** Tiny hand-computable config: 2 SKUs, 2 dedicated lines, zero volatility. */
 function testConfig(overrides: Partial<GameConfig> = {}): GameConfig {
