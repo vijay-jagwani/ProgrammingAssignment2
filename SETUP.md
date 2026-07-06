@@ -3,6 +3,13 @@
 Three steps, ~15 minutes. You need your Supabase project and the Netlify site
 connected to this GitHub repo.
 
+> **This project's values** (the publishable key is public by design — it
+> ships in the frontend bundle and only grants what row-level security allows):
+>
+> - Project ref: `wygzhbjmrnysufndphxq`
+> - `VITE_SUPABASE_URL` = `https://wygzhbjmrnysufndphxq.supabase.co`
+> - `VITE_SUPABASE_ANON_KEY` = `sb_publishable_4Z1tw4ItY3MG5VOU5RC4IQ_Ff1Mt0xs`
+
 ## 1. Supabase — database
 
 Open your project's **SQL Editor** and run the contents of
@@ -22,7 +29,7 @@ enables Realtime on `game_views`.
 
    ```bash
    node scripts/sync-shared.mjs        # refresh the engine copy in the function
-   supabase link --project-ref <your-project-ref>
+   supabase link --project-ref wygzhbjmrnysufndphxq
    supabase functions deploy apply-action
    ```
 
@@ -34,8 +41,8 @@ enables Realtime on `game_views`.
 1. Connect this repo to a Netlify site. `netlify.toml` already sets the build
    (`npm run build`, publish `client/dist`, SPA redirects).
 2. Site settings → Environment variables, add:
-   - `VITE_SUPABASE_URL` = `https://<your-project-ref>.supabase.co`
-   - `VITE_SUPABASE_ANON_KEY` = your project's anon/public key
+   - `VITE_SUPABASE_URL` = `https://wygzhbjmrnysufndphxq.supabase.co`
+   - `VITE_SUPABASE_ANON_KEY` = `sb_publishable_4Z1tw4ItY3MG5VOU5RC4IQ_Ff1Mt0xs`
 3. Trigger a deploy.
 
 ## Verify
