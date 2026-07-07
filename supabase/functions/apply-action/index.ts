@@ -67,7 +67,12 @@ Deno.serve(async (req) => {
     if (!user) return json({ error: 'Not signed in' }, 401);
     const playerId = user.id;
 
-    const admin = createClient(supabaseUrl, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+    // Newer projects: the injected legacy SUPABASE_SERVICE_ROLE_KEY may lack
+    // admin rights, and custom secrets can't start with SUPABASE_. Prefer a
+    // user-set SERVICE_ROLE_KEY secret (sb_secret_...), fall back to legacy.
+    const serviceKey =
+      Deno.env.get('SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const admin = createClient(supabaseUrl, serviceKey);
     const body = await req.json();
 
     if (body.op === 'create') {
