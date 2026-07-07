@@ -22,6 +22,7 @@ interface GameCtx {
   join(code: string, name: string): Promise<void>;
   act(action: ClientAction): Promise<boolean>;
   leave(): void;
+  switchPlayer(): Promise<void>;
 }
 
 const Ctx = createContext<GameCtx>(null as unknown as GameCtx);
@@ -92,7 +93,16 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     setBusy(true);
     setError(null);
     try {
-      const info = await backend.current!.join(code.toUpperCase().trim(), name);
+      const be = backend.current!;
+      let info = await be.join(code.toUpperCase().trim(), name);
+      // Shared browser profile (e.g. two incognito windows): if this identity
+      // already belongs to a different player in the game, mint a fresh one
+      // so the new person doesn't take over the existing seat.
+      const existing = info.view.players.find((p) => p.id === be.playerId());
+      if (existing && existing.name.trim().toLowerCase() !== name.trim().toLowerCase()) {
+        await be.resetIdentity();
+        info = await be.join(code.toUpperCase().trim(), name);
+      }
       persist({ code: info.code, gameId: info.gameId }, info.view);
     } catch (e: any) {
       setError(e.message);
@@ -123,6 +133,22 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     setView(null);
   }, []);
 
+  /** Full reset for a new person on this device: new identity, back to landing. */
+  const switchPlayer = useCallback(async () => {
+    setBusy(true);
+    try {
+      localStorage.removeItem(SESSION_KEY);
+      await backend.current!.resetIdentity();
+      setSession(null);
+      setView(null);
+      setError(null);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
   const me = useMemo(() => {
     if (!view) return null;
     const pid = backend.current!.playerId();
@@ -132,7 +158,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const value: GameCtx = {
     ready, fatal, view, code: session?.code ?? null, me, error, busy,
     clearError: () => setError(null),
-    create, join, act, leave,
+    create, join, act, leave, switchPlayer,
   };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

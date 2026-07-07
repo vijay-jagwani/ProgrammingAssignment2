@@ -45,6 +45,12 @@ async function syncDerived(admin: SupabaseClient, gameId: string, state: GameSta
   }));
   if (playerRows.length) {
     await admin.from('players').upsert(playerRows);
+    // drop rows for kicked players so they lose read access to team views
+    await admin
+      .from('players')
+      .delete()
+      .eq('game_id', gameId)
+      .not('id', 'in', `(${playerRows.map((r) => r.id).join(',')})`);
   }
   const viewRows = allAudiences(state).map((aud) => ({
     game_id: gameId,

@@ -494,6 +494,15 @@ export function reduce(prev: GameState, action: Action): GameState {
       break;
     }
 
+    case 'KICK_PLAYER': {
+      requireAdmin(state, action.playerId);
+      const target = getPlayer(state, action.targetPlayerId);
+      if (target.isAdmin) throw new EngineError('You cannot kick an admin — demote them first');
+      state.players = state.players.filter((p) => p.id !== target.id);
+      log(state, `${target.name} was removed from the game by a facilitator.`);
+      break;
+    }
+
     case 'CREATE_TEAM': {
       requirePhase(state, 'LOBBY');
       const p = getPlayer(state, action.playerId);

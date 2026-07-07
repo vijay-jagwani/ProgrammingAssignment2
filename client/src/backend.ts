@@ -25,6 +25,8 @@ export interface Backend {
   readonly kind: 'local' | 'supabase';
   ready(): Promise<void>;
   playerId(): string;
+  /** Mint a fresh identity — for a second person on the same browser profile. */
+  resetIdentity(): Promise<void>;
   create(name: string, setup: CreateSetup, config?: GameConfig): Promise<SessionInfo>;
   join(code: string, name: string): Promise<SessionInfo>;
   action(code: string, action: ClientAction): Promise<GameView>;
@@ -51,6 +53,10 @@ class LocalBackend implements Backend {
 
   async ready() {}
   playerId() { return this.pid; }
+  async resetIdentity() {
+    this.pid = crypto.randomUUID();
+    localStorage.setItem('scg-player-id', this.pid);
+  }
 
   private async rpc(body: Record<string, unknown>): Promise<any> {
     const res = await fetch('/api/local', {
@@ -118,6 +124,13 @@ class SupabaseBackend implements Backend {
   playerId() {
     if (!this.uid) throw new BackendError('Backend not ready');
     return this.uid;
+  }
+
+  async resetIdentity() {
+    await this.sb.auth.signOut();
+    const { data, error } = await this.sb.auth.signInAnonymously();
+    if (error) throw new BackendError(`Could not switch player: ${error.message}`);
+    this.uid = data.user!.id;
   }
 
   private async rpc(body: Record<string, unknown>): Promise<any> {

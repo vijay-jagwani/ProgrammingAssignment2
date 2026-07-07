@@ -106,6 +106,15 @@ export function Lobby() {
               </button>
             ))}
           </div>
+          <div className="row" style={{ marginBottom: 10 }}>
+            {view.players.filter((p) => !p.isAdmin).map((p) => (
+              <button key={p.id} className="small danger" disabled={busy}
+                title="Remove this player (e.g. a duplicate joined from a shared device)"
+                onClick={() => act({ type: 'KICK_PLAYER', targetPlayerId: p.id })}>
+                Kick {p.name}
+              </button>
+            ))}
+          </div>
           <button className="primary" disabled={busy || view.teamsProgress.length === 0}
             onClick={() => act({ type: 'START_GAME' })}>
             Start game ({view.teamsProgress.length} team{view.teamsProgress.length === 1 ? '' : 's'})

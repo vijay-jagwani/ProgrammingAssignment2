@@ -7,7 +7,7 @@ import { TeamDashboard } from './screens/TeamDashboard';
 import { FinalScreen } from './screens/Final';
 
 export default function App() {
-  const { ready, fatal, view, me, error, clearError, leave } = useGame();
+  const { ready, fatal, view, me, error, clearError, leave, switchPlayer } = useGame();
 
   if (fatal) {
     return (
@@ -37,9 +37,18 @@ export default function App() {
           </span>
         )}
         {view && (
-          <button className="small" onClick={leave} title="Leave this game on this device">
-            Leave
-          </button>
+          <>
+            <button
+              className="small"
+              onClick={switchPlayer}
+              title="Someone else on this device? Get a fresh identity and join as a new player"
+            >
+              Switch player
+            </button>
+            <button className="small" onClick={leave} title="Leave this game on this device (you can rejoin as the same player)">
+              Leave
+            </button>
+          </>
         )}
       </div>
 

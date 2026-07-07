@@ -131,6 +131,21 @@ describe('lobby rules', () => {
     ).toThrow(/already taken/);
   });
 
+  it('admins can kick non-admin players; kicked seats free up', () => {
+    let s = lobby();
+    // a1 holds Demand Planner on Alpha; kick them and let a2 claim it
+    s = reduce(s, { type: 'KICK_PLAYER', playerId: 'adm', targetPlayerId: 'a1' });
+    expect(s.players.some((p) => p.id === 'a1')).toBe(false);
+    s = reduce(s, { type: 'CLAIM_ROLE', playerId: 'a2', role: 'DEMAND_PLANNER' });
+    expect(s.players.find((p) => p.id === 'a2')!.roles).toContain('DEMAND_PLANNER');
+    expect(() =>
+      reduce(s, { type: 'KICK_PLAYER', playerId: 'a2', targetPlayerId: 'b1' }),
+    ).toThrow(/Only an admin/);
+    expect(() =>
+      reduce(s, { type: 'KICK_PLAYER', playerId: 'adm', targetPlayerId: 'adm' }),
+    ).toThrow(/cannot kick an admin/);
+  });
+
   it('teams are capped at 5 players', () => {
     let s = lobby();
     s = reduce(s, { type: 'JOIN', playerId: 'x1', name: 'Extra', asAdmin: false });

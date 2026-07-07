@@ -215,6 +215,7 @@ export interface GameState {
 export type Action =
   | { type: 'JOIN'; playerId: string; name: string; asAdmin: boolean }
   | { type: 'SET_ADMIN'; playerId: string; targetPlayerId: string; isAdmin: boolean }
+  | { type: 'KICK_PLAYER'; playerId: string; targetPlayerId: string }
   | { type: 'CREATE_TEAM'; playerId: string; name: string }
   | { type: 'JOIN_TEAM'; playerId: string; teamId: string }
   | { type: 'CLAIM_ROLE'; playerId: string; role: Role }
