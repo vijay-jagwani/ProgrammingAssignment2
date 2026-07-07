@@ -125,10 +125,16 @@ export interface ProductionAllocation {
   qty: number;
 }
 
+/** How a SKU's produced units are split between transport modes this month. */
+export interface TransportSplit {
+  truckload: number; // ships fast, arrives this month, higher cost
+  interplant: number; // ships slow, arrives next month, lower cost
+}
+
 export interface MonthDecisions {
   forecast: Record<string, number> | null;
   production: ProductionAllocation[] | null;
-  transport: Record<string, TransportMode> | null;
+  transport: Record<string, TransportSplit> | null;
   prices: Record<string, number> | null;
 }
 
@@ -223,7 +229,7 @@ export type Action =
   | { type: 'START_GAME'; playerId: string }
   | { type: 'SUBMIT_FORECAST'; playerId: string; forecast: Record<string, number> }
   | { type: 'SUBMIT_PRODUCTION'; playerId: string; allocations: ProductionAllocation[] }
-  | { type: 'SUBMIT_TRANSPORT'; playerId: string; modes: Record<string, TransportMode> }
+  | { type: 'SUBMIT_TRANSPORT'; playerId: string; split: Record<string, TransportSplit> }
   | { type: 'SUBMIT_PRICES'; playerId: string; prices: Record<string, number> }
   | { type: 'PROPOSE_TRADE'; playerId: string; sellerTeamId: string; skuId: string; qty: number; unitPrice: number; note?: string }
   | { type: 'RESPOND_TRADE'; playerId: string; offerId: string; accept: boolean }
