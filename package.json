@@ -1,0 +1,22 @@
+{
+  "name": "supply-chain-game",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Team-based supply chain simulation game: forecast vs actual, transport tradeoffs, inventory aging, and CEO-led make-vs-buy trading. React + Vite on Netlify, Supabase backend.",
+  "workspaces": [
+    "shared",
+    "client"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c blue,green \"tsx scripts/dev-local.ts\" \"npm run dev -w client\"",
+    "build": "npm run build -w client",
+    "test": "npm run test -w shared",
+    "typecheck": "npm run typecheck -w shared && npm run typecheck -w client",
+    "e2e": "node scripts/e2e.mjs"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "playwright": "^1.61.1",
+    "tsx": "^4.19.2"
+  }
+}

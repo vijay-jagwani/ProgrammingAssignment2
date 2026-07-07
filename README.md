@@ -1,105 +1,96 @@
-### Introduction
+# 📦 Supply Chain Game
 
-This second programming assignment will require you to write an R
-function that is able to cache potentially time-consuming computations.
-For example, taking the mean of a numeric vector is typically a fast
-operation. However, for a very long vector, it may take too long to
-compute the mean, especially if it has to be computed repeatedly (e.g.
-in a loop). If the contents of a vector are not changing, it may make
-sense to cache the value of the mean so that when we need it again, it
-can be looked up in the cache rather than recomputed. In this
-Programming Assignment you will take advantage of the scoping rules of
-the R language and how they can be manipulated to preserve state inside
-of an R object.
+A team-based, multiplayer supply chain simulation for workshops and
+classrooms. Teams of five run a finished-goods business for a season —
+forecasting demand, planning production on scarce lines, choosing transport
+modes, pricing against a shared market, and trading stock with rival teams —
+while facilitators play the customers.
 
-### Example: Caching the Mean of a Vector
+Think *Fresh Connection*-style role play, self-hosted and free, with one
+twist no commercial game has: a **live make-vs-buy market between teams**,
+run by each team's CEO.
 
-In this example we introduce the `<<-` operator which can be used to
-assign a value to an object in an environment that is different from the
-current environment. Below are two functions that are used to create a
-special object that stores a numeric vector and caches its mean.
+## The five roles
 
-The first function, `makeVector` creates a special "vector", which is
-really a list containing a function to
+| Role | Decides |
+|---|---|
+| **Demand Planner** | Monthly forecast per SKU, guided by history and past actuals |
+| **Production Planner** | Which lines make what — capacity is scarce by design, so you can't make everything |
+| **Transport Manager** | Truckload (fast, expensive, sellable this month) vs interplant (slow, cheap, arrives next month) |
+| **Customer Ops Manager** | Selling prices, floored at landed cost |
+| **CEO** | The make-vs-buy call: buy SKUs from other teams on the trading desk, watch the budget |
 
-1.  set the value of the vector
-2.  get the value of the vector
-3.  set the value of the mean
-4.  get the value of the mean
+A player may hold several roles, so short-handed teams still work.
 
-<!-- -->
+## A month in the game
 
-    makeVector <- function(x = numeric()) {
-            m <- NULL
-            set <- function(y) {
-                    x <<- y
-                    m <<- NULL
-            }
-            get <- function() x
-            setmean <- function(mean) m <<- mean
-            getmean <- function() m
-            list(set = set, get = get,
-                 setmean = setmean,
-                 getmean = getmean)
-    }
+1. **Forecast** → 2. **Production** → 3. **Transport** → 4. **Pricing** →
+5. **Price reveal + CEO trading** → 6. **Customer orders** (facilitators
+confirm simulation-proposed orders — identical for every team) →
+7. **Resolution** (sales, lost sales, aging, expiry, holding costs, overdraft
+interest) → 8. **Results**.
 
-The following function calculates the mean of the special "vector"
-created with the above function. However, it first checks to see if the
-mean has already been calculated. If so, it `get`s the mean from the
-cache and skips the computation. Otherwise, it calculates the mean of
-the data and sets the value of the mean in the cache via the `setmean`
-function.
+After the final month: profit leaderboard and a per-team debrief with
+auto-generated learnings (stockout losses, forecast misses, trade activity).
 
-    cachemean <- function(x, ...) {
-            m <- x$getmean()
-            if(!is.null(m)) {
-                    message("getting cached data")
-                    return(m)
-            }
-            data <- x$get()
-            m <- mean(data, ...)
-            x$setmean(m)
-            m
-    }
+Design choices that keep it fair and instructive:
 
-### Assignment: Caching the Inverse of a Matrix
+- **Shared demand**: every team faces the same realized orders — the
+  leaderboard measures decisions, not luck.
+- **Tight capacity**: no team can cover all SKUs, so specialization and
+  trading emerge naturally.
+- **Lost sales, shelf life, and overdraft**: stockouts hurt, stock ages out,
+  and struggling teams keep playing (with interest pain) instead of dying.
+- **Anti-collusion**: trade prices are capped and every trade is visible to
+  facilitators.
 
-Matrix inversion is usually a costly computation and there may be some
-benefit to caching the inverse of a matrix rather than computing it
-repeatedly (there are also alternatives to matrix inversion that we will
-not discuss here). Your assignment is to write a pair of functions that
-cache the inverse of a matrix.
+## Run it
 
-Write the following functions:
+```bash
+npm install
+npm run dev        # http://localhost:5173 — local in-memory backend, no setup
+```
 
-1.  `makeCacheMatrix`: This function creates a special "matrix" object
-    that can cache its inverse.
-2.  `cacheSolve`: This function computes the inverse of the special
-    "matrix" returned by `makeCacheMatrix` above. If the inverse has
-    already been calculated (and the matrix has not changed), then
-    `cacheSolve` should retrieve the inverse from the cache.
+Open several browser windows to play all seats. State survives restarts
+(`data/local-games.json`).
 
-Computing the inverse of a square matrix can be done with the `solve`
-function in R. For example, if `X` is a square invertible matrix, then
-`solve(X)` returns its inverse.
+```bash
+npm test           # engine unit tests (deterministic economics)
+npm run typecheck
+npm run e2e        # Playwright: full 3-month game with 1 admin + 2 teams
+```
 
-For this assignment, assume that the matrix supplied is always
-invertible.
+## Deploy (Supabase + Netlify)
 
-In order to complete this assignment, you must do the following:
+The production setup is serverless: React on Netlify, game state in Supabase
+Postgres, all rules enforced by a single edge function, live sync via
+Supabase Realtime, anonymous auth (name + game code, no accounts).
 
-1.  Fork the GitHub repository containing the stub R files at
-    [https://github.com/rdpeng/ProgrammingAssignment2](https://github.com/rdpeng/ProgrammingAssignment2)
-    to create a copy under your own account.
-2.  Clone your forked GitHub repository to your computer so that you can
-    edit the files locally on your own machine.
-3.  Edit the R file contained in the git repository and place your
-    solution in that file (please do not rename the file).
-4.  Commit your completed R file into YOUR git repository and push your
-    git branch to the GitHub repository under your account.
-5.  Submit to Coursera the URL to your GitHub repository that contains
-    the completed R code for the assignment.
+See **[SETUP.md](SETUP.md)** — three steps, ~15 minutes.
 
-### Grading
+## Repo layout
 
-This assignment will be graded via peer assessment.
+```
+shared/     pure deterministic game engine + types (the rules live here)
+client/     React + Vite frontend (all screens)
+supabase/   SQL migration + apply-action edge function
+scripts/    local dev backend, e2e test, engine->function sync
+```
+
+The engine is a pure reducer `(state, action) → state` with a seeded RNG:
+the same inputs always produce the same game, it runs identically in tests,
+the local harness, and the Deno edge function, and clients only ever receive
+a redacted per-team view — you can't peek at rivals in dev tools.
+
+## Facilitator quick guide
+
+1. Host a game, share the 6-character code; promote co-facilitators (admins
+   can't be on teams).
+2. Players join, form teams, claim roles. Start the game.
+3. Each phase: wait for the ✓ marks, then advance. Unsubmitted decisions get
+   safe defaults.
+4. In the Orders phase you are the market: confirm or tweak the proposed
+   orders (month 1: everyone wants everything on shelf).
+5. Advance through Results each month; after the last month the leaderboard
+   and debrief appear. Budget ~10–15 minutes per month for discussion — the
+   arguing is the point.
