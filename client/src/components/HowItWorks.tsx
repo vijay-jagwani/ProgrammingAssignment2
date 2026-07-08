@@ -155,7 +155,12 @@ export function HowItWorks() {
       </div>
 
       <div className="card">
-        <h3>Facilitator quick start</h3>
+        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
+          <h3>Facilitator quick start</h3>
+          <a href="/facilitator-guide.html" target="_blank" rel="noopener noreferrer">
+            <button className="primary small">📄 Full facilitator guide (print / save as PDF) →</button>
+          </a>
+        </div>
         <ol className="learn-list">
           <li><b>Host a game</b> above and share the 6-character code. Co-facilitators join and you promote them (admins run the market, they can’t be on a team).</li>
           <li><b>Players join</b>, form teams of five, and claim roles. Two people on one device? Use <b>Switch player</b>. Aim for 2+ teams so the make-vs-buy market comes alive.</li>

@@ -51,7 +51,12 @@ export function Landing() {
         </div>
         <div className="card">
           <h2>Host a new game</h2>
-          <p className="sub">You become the facilitator (admin) — admins run the market, not a team.</p>
+          <p className="sub">
+            You become the facilitator (admin) — admins run the market, not a team.{' '}
+            <a href="/facilitator-guide.html" target="_blank" rel="noopener noreferrer">
+              Read the facilitator guide →
+            </a>
+          </p>
           <div className="stack">
             <label className="field">
               Your name
