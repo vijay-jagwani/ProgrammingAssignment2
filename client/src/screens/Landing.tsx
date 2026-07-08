@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useGame } from '../state';
+import { HowItWorks } from '../components/HowItWorks';
 
 export function Landing() {
   const { create, join, busy } = useGame();
@@ -104,6 +105,8 @@ export function Landing() {
         Tip: capacity is deliberately scarce — no team can make every SKU. Specialize, then let your
         CEOs trade for the rest.
       </p>
+
+      <HowItWorks />
     </div>
   );
 }
