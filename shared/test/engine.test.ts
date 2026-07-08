@@ -98,9 +98,7 @@ function playMonth(
     { type: 'ADVANCE_PHASE', playerId: 'adm' }, // -> PRODUCTION
     { type: 'SUBMIT_PRODUCTION', playerId: 'a2', allocations: opts.aProd ?? [] },
     { type: 'SUBMIT_PRODUCTION', playerId: 'b2', allocations: opts.bProd ?? [] },
-    { type: 'ADVANCE_PHASE', playerId: 'adm' }, // -> TRANSPORT
-    { type: 'SUBMIT_TRANSPORT', playerId: 'a3', modes: { S1: 'truckload', S2: 'truckload' } },
-    { type: 'SUBMIT_TRANSPORT', playerId: 'b3', modes: { S1: 'truckload', S2: 'truckload' } },
+    { type: 'ADVANCE_PHASE', playerId: 'adm' }, // -> TRANSPORT (defaults to all-truckload)
     { type: 'ADVANCE_PHASE', playerId: 'adm' }, // -> PRICING
   ]);
   if (opts.aPrices) s = reduce(s, { type: 'SUBMIT_PRICES', playerId: 'a4', prices: opts.aPrices });
@@ -227,6 +225,54 @@ describe('month 1 economics (hand-computed)', () => {
     expect(() =>
       reduce(s, { type: 'RESPOND_TRADE', playerId: 'a5', offerId: s.tradeOffers[0].id, accept: true }),
     ).toThrow(/enough stock on hand/);
+  });
+
+  it('split shipment: truckload lands this month, interplant arrives next month', () => {
+    // Alpha produces 250 S1, ships 200 truckload (sell now) + 50 interplant (next month)
+    let s = apply(start, [
+      { type: 'ADVANCE_PHASE', playerId: 'adm' }, // -> PRODUCTION
+      { type: 'SUBMIT_PRODUCTION', playerId: 'a2', allocations: [{ lineId: 'L1', skuId: 'S1', qty: 250 }] },
+      { type: 'ADVANCE_PHASE', playerId: 'adm' }, // -> TRANSPORT
+    ]);
+    // must allocate exactly the produced units
+    expect(() =>
+      reduce(s, { type: 'SUBMIT_TRANSPORT', playerId: 'a3', split: { S1: { truckload: 200, interplant: 40 }, S2: { truckload: 0, interplant: 0 } } }),
+    ).toThrow(/split the 250 produced units/);
+
+    s = apply(s, [
+      { type: 'SUBMIT_TRANSPORT', playerId: 'a3', split: { S1: { truckload: 200, interplant: 50 }, S2: { truckload: 0, interplant: 0 } } },
+      { type: 'ADVANCE_PHASE', playerId: 'adm' }, // -> PRICING
+      { type: 'SUBMIT_PRICES', playerId: 'a4', prices: { S1: 20, S2: 16.5 } },
+      { type: 'ADVANCE_PHASE', playerId: 'adm' }, // -> TRADING
+      { type: 'ADVANCE_PHASE', playerId: 'adm' }, // -> ORDERS
+      { type: 'SUBMIT_ORDERS', playerId: 'adm', orders: { S1: 200, S2: 0 } },
+      { type: 'ADVANCE_PHASE', playerId: 'adm' }, // resolve month 1
+    ]);
+    const alpha = s.teams[0];
+    const r = alpha.results[0];
+    // transport cost: 200 truckload @4 + 50 interplant @1.5 = 800 + 75 = 875
+    expect(r.transportCost).toBe(875);
+    // 200 truckload units landed and all sold this month
+    expect(r.bySku.S1.fulfilled).toBe(200);
+    // the 50 interplant units are still in transit, arriving next month
+    expect(alpha.pipeline).toEqual([{ skuId: 'S1', qty: 50, mode: 'interplant', arrivesMonth: 2 }]);
+    expect(alpha.inventory.S1).toEqual([]); // truckload units all sold, none held
+
+    // advance to month 2; the interplant stock lands and is sellable
+    s = reduce(s, { type: 'ADVANCE_PHASE', playerId: 'adm' }); // -> month 2 FORECAST
+    s = apply(s, [
+      { type: 'ADVANCE_PHASE', playerId: 'adm' }, // -> PRODUCTION (none)
+      { type: 'ADVANCE_PHASE', playerId: 'adm' }, // -> TRANSPORT
+      { type: 'ADVANCE_PHASE', playerId: 'adm' }, // -> PRICING
+      { type: 'SUBMIT_PRICES', playerId: 'a4', prices: { S1: 20, S2: 16.5 } },
+      { type: 'ADVANCE_PHASE', playerId: 'adm' }, // -> TRADING
+      { type: 'ADVANCE_PHASE', playerId: 'adm' }, // ORDERS
+      { type: 'SUBMIT_ORDERS', playerId: 'adm', orders: { S1: 50, S2: 0 } },
+      { type: 'ADVANCE_PHASE', playerId: 'adm' }, // resolve month 2
+    ]);
+    // the 50 interplant units arrived and sold in month 2
+    expect(s.teams[0].results[1].bySku.S1.fulfilled).toBe(50);
+    expect(s.teams[0].pipeline).toEqual([]);
   });
 });
 

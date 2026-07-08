@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   GameView, PHASE_LABELS, PHASE_ORDER, PHASE_ROLE, ProductionAllocation, Role,
-  ROLE_LABELS, TeamState, TransportMode, priceFloor, referenceCost,
+  ROLE_LABELS, TeamState, TransportSplit, priceFloor, referenceCost,
 } from '@scg/shared';
 import { useGame } from '../state';
 import { ConfirmButton, NumInput, fmtMoney, fmtNum, pct } from '../components/ui';
@@ -252,51 +252,85 @@ function TransportPanel() {
   const { view, act, busy } = useGame();
   const team = view!.myTeam!;
   const config = view!.config;
-  const producedBySku: Record<string, number> = {};
+  const produced: Record<string, number> = {};
   for (const a of team.decisions.production ?? []) {
-    producedBySku[a.skuId] = (producedBySku[a.skuId] ?? 0) + a.qty;
+    produced[a.skuId] = (produced[a.skuId] ?? 0) + a.qty;
   }
-  const [modes, setModes] = useState<Record<string, TransportMode>>(() => {
-    const init: Record<string, TransportMode> = {};
-    for (const s of config.skus) init[s.id] = team.decisions.transport?.[s.id] ?? 'truckload';
+  // per-SKU split: how many produced units go truckload vs interplant
+  const [split, setSplit] = useState<Record<string, TransportSplit>>(() => {
+    const init: Record<string, TransportSplit> = {};
+    for (const s of config.skus) {
+      const qty = produced[s.id] ?? 0;
+      init[s.id] = team.decisions.transport?.[s.id] ?? { truckload: qty, interplant: 0 };
+    }
     return init;
   });
   const submitted = team.decisions.transport !== null;
-  const cost = config.skus.reduce(
-    (s, sku) => s + (producedBySku[sku.id] ?? 0) * config.transport[modes[sku.id]].costPerUnit, 0);
+
+  const setMode = (skuId: string, mode: 'truckload' | 'interplant', value: number) => {
+    const qty = produced[skuId] ?? 0;
+    const v = Math.max(0, Math.min(qty, Math.round(value || 0)));
+    const other = qty - v; // the rest goes to the other mode automatically
+    setSplit({
+      ...split,
+      [skuId]: mode === 'truckload'
+        ? { truckload: v, interplant: other }
+        : { truckload: other, interplant: v },
+    });
+  };
+
+  const cost = config.skus.reduce((sum, sku) => {
+    const s = split[sku.id] ?? { truckload: 0, interplant: 0 };
+    return sum + s.truckload * config.transport.truckload.costPerUnit
+      + s.interplant * config.transport.interplant.costPerUnit;
+  }, 0);
+
+  const allBalanced = config.skus.every((sku) => {
+    const s = split[sku.id] ?? { truckload: 0, interplant: 0 };
+    return s.truckload + s.interplant === (produced[sku.id] ?? 0);
+  });
 
   return (
     <div className="card">
       <h2>Transport plan — month {view!.month}</h2>
       <p className="sub">
-        Truckload (${config.transport.truckload.costPerUnit}/u) takes ~1 week: sellable{' '}
-        <b>this month</b>. Interplant (${config.transport.interplant.costPerUnit}/u) takes ~3 weeks:
-        arrives <b>next month</b> — cheaper, but nothing to sell now unless you hold stock.
+        Split each SKU's production across two modes. <b>Truckload</b> (${config.transport.truckload.costPerUnit}/u,
+        ~1 week) arrives <b>this month</b> so you can sell it now. <b>Interplant</b> (${config.transport.interplant.costPerUnit}/u,
+        ~3 weeks) is cheaper but arrives <b>next month</b> — great for stock you'll sell later. Produce extra and
+        split it: cover this month by truckload, pre-position the rest cheaply by interplant.
       </p>
       <table className="data">
         <thead>
-          <tr><th>SKU</th><th className="num">Producing</th><th className="num">On hand</th><th>Mode</th><th>Arrives</th></tr>
+          <tr>
+            <th>SKU</th><th className="num">Produced</th>
+            <th className="num">Truckload → M{view!.month}</th>
+            <th className="num">Interplant → M{view!.month + 1}</th>
+            <th className="num">Line cost</th>
+          </tr>
         </thead>
         <tbody>
           {config.skus.map((s) => {
-            const qty = producedBySku[s.id] ?? 0;
-            const onHand = unitsOf(team, s.id);
-            const risky = modes[s.id] === 'interplant' && onHand === 0 && qty > 0;
+            const qty = produced[s.id] ?? 0;
+            const cur = split[s.id] ?? { truckload: 0, interplant: 0 };
+            const noneNow = qty > 0 && cur.truckload === 0 && unitsOf(team, s.id) === 0;
             return (
               <tr key={s.id}>
-                <td>{s.name}</td>
-                <td className="num">{fmtNum(qty)}</td>
-                <td className="num">{fmtNum(onHand)}</td>
                 <td>
-                  <select value={modes[s.id]} disabled={qty === 0}
-                    onChange={(e) => setModes({ ...modes, [s.id]: e.target.value as TransportMode })}>
-                    <option value="truckload">Truckload — fast, ${config.transport.truckload.costPerUnit}/u</option>
-                    <option value="interplant">Interplant — slow, ${config.transport.interplant.costPerUnit}/u</option>
-                  </select>
+                  {s.name}
+                  {noneNow && <span className="badge bad" style={{ marginLeft: 6 }}>⚠ nothing on shelf this month</span>}
                 </td>
-                <td>
-                  {qty === 0 ? '—' : modes[s.id] === 'truckload' ? `Month ${view!.month}` : `Month ${view!.month + 1}`}
-                  {risky && <span className="badge bad" style={{ marginLeft: 6 }}>⚠ nothing to sell this month</span>}
+                <td className="num">{fmtNum(qty)}</td>
+                <td className="num">
+                  <NumInput value={cur.truckload} softCap={qty} min={0}
+                    onChange={(v) => setMode(s.id, 'truckload', v)} />
+                </td>
+                <td className="num">
+                  <NumInput value={cur.interplant} softCap={qty} min={0}
+                    onChange={(v) => setMode(s.id, 'interplant', v)} />
+                </td>
+                <td className="num">
+                  {fmtMoney(cur.truckload * config.transport.truckload.costPerUnit
+                    + cur.interplant * config.transport.interplant.costPerUnit)}
                 </td>
               </tr>
             );
@@ -304,10 +338,12 @@ function TransportPanel() {
         </tbody>
       </table>
       <div className="row" style={{ marginTop: 12 }}>
-        <ConfirmButton disabled={busy} onConfirm={() => act({ type: 'SUBMIT_TRANSPORT', modes })}>
+        <ConfirmButton disabled={busy || !allBalanced}
+          onConfirm={() => act({ type: 'SUBMIT_TRANSPORT', split })}>
           {submitted ? 'Update transport' : 'Submit transport'} — cost {fmtMoney(cost)}
         </ConfirmButton>
-        {submitted && <span className="badge good">✓ Submitted</span>}
+        {!allBalanced && <span className="badge bad">Each SKU's two amounts must add up to its produced units</span>}
+        {submitted && allBalanced && <span className="badge good">✓ Submitted</span>}
       </div>
     </div>
   );

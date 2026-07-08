@@ -14,7 +14,7 @@ import {
   SkuMonthOutcome,
   TeamState,
   TradeOffer,
-  TransportMode,
+  TransportSplit,
 } from './types.ts';
 
 // ---------------------------------------------------------------- helpers
@@ -58,6 +58,27 @@ function requirePhase(state: GameState, phase: Phase): void {
   if (state.phase !== phase) {
     throw new EngineError(`Not allowed now: game is in the ${state.phase} phase`);
   }
+}
+
+/** Units of each SKU the team plans to produce this month (from its plan). */
+function producedBySku(team: TeamState): Record<string, number> {
+  const m: Record<string, number> = {};
+  for (const a of team.decisions.production ?? []) {
+    if (a.qty > 0) m[a.skuId] = (m[a.skuId] ?? 0) + a.qty;
+  }
+  return m;
+}
+
+/** Blended transport cost per unit for a SKU given its truckload/interplant split. */
+function splitTransportUnitCost(config: GameConfig, split?: { truckload: number; interplant: number }): number {
+  if (!split) return config.transport.truckload.costPerUnit;
+  const total = split.truckload + split.interplant;
+  if (total <= 0) return config.transport.truckload.costPerUnit;
+  return (
+    (split.truckload * config.transport.truckload.costPerUnit +
+      split.interplant * config.transport.interplant.costPerUnit) /
+    total
+  );
 }
 
 function inventoryUnits(team: TeamState, skuId?: string): number {
@@ -146,8 +167,7 @@ export function priceFloor(state: GameState, team: TeamState, skuId: string): nu
     prodUnit = costs.length ? Math.min(...costs) : 10;
   }
 
-  const mode: TransportMode = team.decisions.transport?.[skuId] ?? 'truckload';
-  const transportUnit = config.transport[mode].costPerUnit;
+  const transportUnit = splitTransportUnitCost(config, team.decisions.transport?.[skuId]);
   return round2(prodUnit + transportUnit + config.holdingCostPerUnitPerMonth);
 }
 
@@ -263,7 +283,11 @@ function fillDefaults(state: GameState, leaving: Phase): void {
       log(state, `${team.name}: no production plan submitted — producing nothing this month.`);
     }
     if (leaving === 'TRANSPORT' && !d.transport) {
-      d.transport = Object.fromEntries(state.config.skus.map((s) => [s.id, 'truckload' as TransportMode]));
+      // default: ship everything produced by truckload (arrives this month)
+      const made = producedBySku(team);
+      d.transport = Object.fromEntries(
+        state.config.skus.map((s) => [s.id, { truckload: made[s.id] ?? 0, interplant: 0 }]),
+      );
     }
     if (leaving === 'PRICING' && !d.prices) {
       d.prices = Object.fromEntries(
@@ -348,20 +372,27 @@ function resolveMonth(state: GameState): void {
     }
 
     // 1. charge production and dispatch to transport pipeline
-    const producedBySku: Record<string, number> = {};
+    const producedMap: Record<string, number> = {};
     for (const a of d.production ?? []) {
       if (a.qty <= 0) continue;
       const line = config.lines.find((l) => l.id === a.lineId)!;
       result.productionCost += a.qty * line.costPerUnit;
-      producedBySku[a.skuId] = (producedBySku[a.skuId] ?? 0) + a.qty;
+      producedMap[a.skuId] = (producedMap[a.skuId] ?? 0) + a.qty;
     }
-    for (const [skuId, qty] of Object.entries(producedBySku)) {
-      const mode: TransportMode = d.transport?.[skuId] ?? 'truckload';
-      const modeCfg = config.transport[mode];
-      result.transportCost += qty * modeCfg.costPerUnit;
-      // truckload (1 wk) lands this month, interplant (3 wks) next month
-      const arrivesMonth = mode === 'truckload' ? state.month : state.month + 1;
-      team.pipeline.push({ skuId, qty, mode, arrivesMonth });
+    for (const [skuId, qty] of Object.entries(producedMap)) {
+      // split the produced units across modes; truckload (1 wk) lands this
+      // month, interplant (3 wks) arrives next month. Default: all truckload.
+      const split = d.transport?.[skuId] ?? { truckload: qty, interplant: 0 };
+      const tl = Math.min(qty, Math.max(0, split.truckload));
+      const ip = Math.max(0, qty - tl); // any remainder ships interplant
+      if (tl > 0) {
+        result.transportCost += tl * config.transport.truckload.costPerUnit;
+        team.pipeline.push({ skuId, qty: tl, mode: 'truckload', arrivesMonth: state.month });
+      }
+      if (ip > 0) {
+        result.transportCost += ip * config.transport.interplant.costPerUnit;
+        team.pipeline.push({ skuId, qty: ip, mode: 'interplant', arrivesMonth: state.month + 1 });
+      }
     }
 
     // 2. land arrivals due this month
@@ -589,15 +620,25 @@ export function reduce(prev: GameState, action: Action): GameState {
     case 'SUBMIT_TRANSPORT': {
       requirePhase(state, 'TRANSPORT');
       const { team } = requireRole(state, action.playerId, 'TRANSPORT_MANAGER');
-      const modes: Record<string, TransportMode> = {};
+      const made = producedBySku(team);
+      const split: Record<string, TransportSplit> = {};
       for (const sku of state.config.skus) {
-        const m = action.modes[sku.id];
-        if (m !== 'truckload' && m !== 'interplant') {
-          throw new EngineError(`Pick a transport mode for ${sku.name}`);
+        const s = action.split[sku.id] ?? { truckload: 0, interplant: 0 };
+        const tl = Math.round(s.truckload || 0);
+        const ip = Math.round(s.interplant || 0);
+        if (tl < 0 || ip < 0) {
+          throw new EngineError(`Transport quantities for ${sku.name} must be non-negative`);
         }
-        modes[sku.id] = m;
+        const produced = made[sku.id] ?? 0;
+        if (tl + ip !== produced) {
+          throw new EngineError(
+            `${sku.name}: split the ${produced} produced units across truckload + interplant ` +
+              `(you allocated ${tl + ip})`,
+          );
+        }
+        split[sku.id] = { truckload: tl, interplant: ip };
       }
-      team.decisions.transport = modes;
+      team.decisions.transport = split;
       break;
     }
 
