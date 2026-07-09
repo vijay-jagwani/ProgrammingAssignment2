@@ -82,6 +82,10 @@ the same inputs always produce the same game, it runs identically in tests,
 the local harness, and the Deno edge function, and clients only ever receive
 a redacted per-team view — you can't peek at rivals in dev tools.
 
+**New here?** [`ARCHITECTURE.md`](ARCHITECTURE.md) explains how the backend
+works and why Supabase + Netlify, in plain English — good to share with
+non-developers and technical reviewers alike.
+
 ## Facilitator quick guide
 
 1. Host a game, share the 6-character code; promote co-facilitators (admins
