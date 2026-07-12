@@ -51,8 +51,9 @@ npm install
 npm run dev        # http://localhost:5173 — local in-memory backend, no setup
 ```
 
-Open several browser windows to play all seats. State survives restarts
-(`data/local-games.json`).
+Open several browser tabs to play all seats — each tab is its own player
+(identity is per tab, so one window can host the admin and a whole team).
+State survives restarts (`data/local-games.json`).
 
 ```bash
 npm test           # engine unit tests (deterministic economics)

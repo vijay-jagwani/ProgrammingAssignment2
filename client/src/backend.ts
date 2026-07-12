@@ -43,10 +43,12 @@ class LocalBackend implements Backend {
   private pid: string;
 
   constructor() {
-    let pid = localStorage.getItem('scg-player-id');
+    // sessionStorage is PER TAB: every browser tab is its own player, so a
+    // whole team can be tested from one browser window with multiple tabs.
+    let pid = sessionStorage.getItem('scg-player-id');
     if (!pid) {
       pid = crypto.randomUUID();
-      localStorage.setItem('scg-player-id', pid);
+      sessionStorage.setItem('scg-player-id', pid);
     }
     this.pid = pid;
   }
@@ -55,7 +57,7 @@ class LocalBackend implements Backend {
   playerId() { return this.pid; }
   async resetIdentity() {
     this.pid = crypto.randomUUID();
-    localStorage.setItem('scg-player-id', this.pid);
+    sessionStorage.setItem('scg-player-id', this.pid);
   }
 
   private async rpc(body: Record<string, unknown>): Promise<any> {
@@ -103,7 +105,12 @@ class SupabaseBackend implements Backend {
   private uid: string | null = null;
 
   constructor(url: string, anonKey: string) {
-    this.sb = createClient(url, anonKey);
+    // Keep the auth session in sessionStorage (per tab, survives refresh)
+    // instead of localStorage (shared by every tab). Tabs no longer fight
+    // over one identity: each tab is an independent player.
+    this.sb = createClient(url, anonKey, {
+      auth: { storage: window.sessionStorage, storageKey: 'scg-auth' },
+    });
   }
 
   async ready() {

@@ -4,7 +4,7 @@ import { useGame } from '../state';
 import { fmtMoney, fmtNum } from '../components/ui';
 
 export function Lobby() {
-  const { view, me, act, busy } = useGame();
+  const { view, me, act, busy, warn } = useGame();
   const [teamName, setTeamName] = useState('');
   if (!view || !me) return null;
 
@@ -61,11 +61,16 @@ export function Lobby() {
                       key={r}
                       className={`rolechip${mine ? ' mine' : owner ? ' taken' : ''}`}
                       onClick={() => {
-                        if (!iAmHere || busy) return;
+                        if (busy) return;
+                        if (!iAmHere) {
+                          // Explain instead of silently ignoring the click
+                          if (!me.isAdmin) warn(`Join ${t.name} first (click "Join team"), then pick your role.`);
+                          return;
+                        }
                         if (mine) act({ type: 'RELEASE_ROLE', role: r });
                         else if (free) act({ type: 'CLAIM_ROLE', role: r });
                       }}
-                      title={owner ? `Taken by ${owner}` : iAmHere ? 'Click to claim' : ''}
+                      title={owner ? `Taken by ${owner}` : iAmHere ? 'Click to claim' : 'Join this team first'}
                     >
                       {ROLE_LABELS[r]}{owner ? ` — ${owner}` : ''}
                     </span>

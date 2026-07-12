@@ -18,6 +18,8 @@ interface GameCtx {
   error: string | null;
   busy: boolean;
   clearError(): void;
+  /** Show a message in the error banner without hitting the backend. */
+  warn(message: string): void;
   create(name: string, setup: CreateSetup): Promise<void>;
   join(code: string, name: string): Promise<void>;
   act(action: ClientAction): Promise<boolean>;
@@ -46,7 +48,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     backend.current!
       .ready()
       .then(async () => {
-        const saved = localStorage.getItem(SESSION_KEY);
+        // sessionStorage is per tab: each tab keeps its own game session,
+        // matching the per-tab player identity in backend.ts.
+        const saved = sessionStorage.getItem(SESSION_KEY);
         if (saved) {
           const s = JSON.parse(saved) as Session;
           const v = await backend.current!.fetchView(s.code, s.gameId);
@@ -54,7 +58,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
             setSession(s);
             setView(v);
           } else {
-            localStorage.removeItem(SESSION_KEY);
+            sessionStorage.removeItem(SESSION_KEY);
           }
         }
         setReady(true);
@@ -71,7 +75,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   }, [session?.code, session?.gameId]);
 
   const persist = (s: Session, v: GameView) => {
-    localStorage.setItem(SESSION_KEY, JSON.stringify(s));
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(s));
     setSession(s);
     setView(v);
   };
@@ -128,7 +132,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   }, [session]);
 
   const leave = useCallback(() => {
-    localStorage.removeItem(SESSION_KEY);
+    sessionStorage.removeItem(SESSION_KEY);
     setSession(null);
     setView(null);
   }, []);
@@ -137,7 +141,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const switchPlayer = useCallback(async () => {
     setBusy(true);
     try {
-      localStorage.removeItem(SESSION_KEY);
+      sessionStorage.removeItem(SESSION_KEY);
       await backend.current!.resetIdentity();
       setSession(null);
       setView(null);
@@ -158,6 +162,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const value: GameCtx = {
     ready, fatal, view, code: session?.code ?? null, me, error, busy,
     clearError: () => setError(null),
+    warn: (m: string) => setError(m),
     create, join, act, leave, switchPlayer,
   };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
