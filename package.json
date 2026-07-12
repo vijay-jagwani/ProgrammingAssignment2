@@ -12,7 +12,9 @@
     "build": "npm run build -w client",
     "test": "npm run test -w shared",
     "typecheck": "npm run typecheck -w shared && npm run typecheck -w client",
-    "e2e": "node scripts/e2e.mjs"
+    "e2e": "node scripts/e2e.mjs",
+    "e2e:live": "node scripts/e2e-live.mjs",
+    "e2e:tabs": "node scripts/e2e-tabs.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

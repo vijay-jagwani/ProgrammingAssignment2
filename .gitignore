@@ -8,3 +8,5 @@ data/
 .vite/
 .env.local
 .env
+e2e-shots/
+e2e-live-shots/
