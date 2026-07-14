@@ -194,14 +194,31 @@ function ProductionPanel() {
     .filter((a) => a.qty > 0);
   const submitted = team.decisions.production !== null;
 
+  const forecastOf = (skuId: string) => team.decisions.forecast?.[skuId] ?? 0;
+  const totalForecast = config.skus.reduce((s, sk) => s + forecastOf(sk.id), 0);
+  const totalCapacity = config.lines.reduce((s, l) => s + l.capacityPerMonth, 0);
+  const surplus = totalCapacity - totalForecast;
+
   return (
     <div className="card">
       <h2>Production plan — month {view!.month}</h2>
-      <p className="sub">
-        Allocate units to lines. Capacity is scarce by design — you probably can't make everything.
-        Team forecast:{' '}
-        {config.skus.map((s) => `${s.name} ${fmtNum(team.decisions.forecast?.[s.id] ?? 0)}`).join(' · ')}
-      </p>
+      <div className="callout" style={{
+        background: 'var(--wash, rgba(42,120,214,0.08))', border: '1px solid var(--grid)',
+        borderRadius: 10, padding: '10px 14px', marginBottom: 12,
+      }}>
+        <b>📈 Demand forecast:</b> this month your Demand Planner expects{' '}
+        {config.skus.map((s, i) => (
+          <span key={s.id}>{i > 0 && ', '}<b>{fmtNum(forecastOf(s.id))} u</b> of {s.name}</span>
+        ))}
+        {' '}— <b>{fmtNum(totalForecast)} u in total</b>. Your lines can build up to{' '}
+        <b>{fmtNum(totalCapacity)} u</b>.{' '}
+        {totalForecast === 0
+          ? 'No forecast was submitted — check with your Demand Planner before building.'
+          : surplus >= 0
+            ? `That's enough to cover the whole forecast — but anything you build beyond demand sits on the shelf, losing value every month (age loss), so only overbuild what you plan to sell.`
+            : `That's ${fmtNum(-surplus)} u short of the forecast — you can't make everything, so prioritize your winners and let your CEO buy the rest from other teams.`}
+      </div>
+      <p className="sub">Allocate units to lines below. Each line shows its capacity and unit cost.</p>
       {config.lines.map((line) => {
         const used = usedOn(line.id);
         const over = used > line.capacityPerMonth;

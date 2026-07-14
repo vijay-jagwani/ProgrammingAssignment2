@@ -440,7 +440,9 @@ function resolveMonth(state: GameState): void {
       }
       for (const b of kept) {
         result.holdingCost += b.qty * config.holdingCostPerUnitPerMonth;
-        result.ageLossCost += b.qty * b.age * sku.ageLossCostPerUnitPerMonth;
+        // flat monthly depreciation: over a full shelf life a unit loses its
+        // whole manufacturing cost, then expires and is written off entirely
+        result.ageLossCost += b.qty * sku.ageLossCostPerUnitPerMonth;
         b.age += 1;
       }
       team.inventory[sku.id] = kept;

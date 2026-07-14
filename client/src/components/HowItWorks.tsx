@@ -19,7 +19,7 @@ const ROLES: RoleCard[] = [
   {
     role: 'Production Planner',
     who: 'The factory boss',
-    does: 'Allocates the forecast to production lines within scarce capacity. Cannot make every SKU, so must choose what to build in-house and flag what to buy.',
+    does: 'Allocates the forecast to production lines within capacity. On harder settings you cannot make every SKU — choose what to build in-house and flag what to buy; on Easy, resist overbuilding.',
     color: 'var(--series-2)',
   },
   {
@@ -65,14 +65,14 @@ const OBJECTIVES = [
   ['The bullwhip effect', 'Customer orders swing month to month as shelves stock out and overstock — small signals, big upstream swings.'],
   ['Speed vs cost tradeoffs', 'Fast truckload or cheap interplant? Every logistics choice trades cash against availability.'],
   ['Inventory economics', 'Holding costs, aging, and shelf-life write-offs punish carrying the wrong stock.'],
-  ['Make vs buy', 'With scarce capacity, teams specialize and negotiate — the classic sourcing decision, live.'],
+  ['Make vs buy', 'When capacity is scarce, teams specialize and negotiate — the classic sourcing decision, live.'],
   ['Cross-functional alignment', 'Five roles, one P&L. The team wins or loses together, so they must reconcile.'],
 ];
 
 const TIERS = [
-  ['Easy', 'Calm demand, roomy capacity', 'Teaching the loop — low volatility, teams can nearly self-supply. Good for a first play or a short session.'],
-  ['Medium', 'Tight capacity, must trade', 'The default. Capacity covers only ~3 of 5 SKUs, so specialization and CEO trading become essential.'],
-  ['Hard', 'Volatile demand, scarce capacity', 'High demand swings and thin capacity — punishing forecasts and aggressive trading. For experienced groups.'],
+  ['Easy', 'More capacity than demand', 'The overstock lesson: you CAN build everything — but unsold units bleed value every month (age loss equals the build cost spread over shelf life), so excess must be priced to move.'],
+  ['Medium', 'Capacity ≈ demand (95–100%)', 'The default. A near-perfect plan covers the market — any slack or misallocation leaves gaps to fill by trading.'],
+  ['Hard', 'Scarce capacity, volatile demand', 'Capacity covers only half of demand and forecasts get punished — specialization and aggressive CEO trading are essential. For experienced groups.'],
 ];
 
 export function HowItWorks() {
@@ -83,7 +83,7 @@ export function HowItWorks() {
         <p className="sub">
           A team of five runs a finished-goods supply chain over several months. Each month moves
           through eight phases; each role acts in turn, then the market (the facilitators) places the
-          real orders and the engine settles the books. Shared demand and tight capacity mean the
+          real orders and the engine settles the books. Shared demand means the
           leaderboard rewards good decisions, not luck.
         </p>
       </div>

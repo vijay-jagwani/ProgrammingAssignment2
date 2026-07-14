@@ -83,9 +83,9 @@ export function Landing() {
               <label className="field">
                 Difficulty
                 <select value={difficulty} onChange={(e) => setDifficulty(e.target.value as any)}>
-                  <option value="easy">Easy — calm demand, roomy capacity</option>
-                  <option value="medium">Medium — tight capacity, must trade</option>
-                  <option value="hard">Hard — volatile demand, scarce capacity</option>
+                  <option value="easy">Easy — spare capacity; overbuilding bleeds value</option>
+                  <option value="medium">Medium — capacity ≈ demand; plan tight</option>
+                  <option value="hard">Hard — scarce capacity, volatile demand; must trade</option>
                 </select>
               </label>
               <label className="field">

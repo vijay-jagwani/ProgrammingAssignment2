@@ -15,7 +15,7 @@ run by each team's CEO.
 | Role | Decides |
 |---|---|
 | **Demand Planner** | Monthly forecast per SKU, guided by history and past actuals |
-| **Production Planner** | Which lines make what — capacity is scarce by design, so you can't make everything |
+| **Production Planner** | Which lines make what — capacity depends on difficulty, from roomy (Easy) to scarce (Hard) |
 | **Transport Manager** | Truckload (fast, expensive, sellable this month) vs interplant (slow, cheap, arrives next month) |
 | **Customer Ops Manager** | Selling prices, floored at landed cost |
 | **CEO** | The make-vs-buy call: buy SKUs from other teams on the trading desk, watch the budget |
@@ -37,8 +37,11 @@ Design choices that keep it fair and instructive:
 
 - **Shared demand**: every team faces the same realized orders — the
   leaderboard measures decisions, not luck.
-- **Tight capacity**: no team can cover all SKUs, so specialization and
-  trading emerge naturally.
+- **Capacity scales with difficulty**: Easy has *more* capacity than demand
+  (the overstock/age-loss lesson), Medium sits at 95–100% of demand, and
+  Hard is scarce — specialization and trading emerge naturally.
+- **Age loss = build cost spread over shelf life**: a unit that sits out its
+  full shelf life loses its entire manufacturing cost, then expires.
 - **Lost sales, shelf life, and overdraft**: stockouts hurt, stock ages out,
   and struggling teams keep playing (with interest pain) instead of dying.
 - **Anti-collusion**: trade prices are capped and every trade is visible to

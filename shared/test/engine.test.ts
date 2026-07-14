@@ -166,15 +166,15 @@ describe('month 1 economics (hand-computed)', () => {
     const alpha = month1.teams[0];
     const r = alpha.results[0];
     // production 250x10=2500, transport 250x4=1000, sold 200 S1 @20 = 4000
-    // 50 left @ age 0 -> holding 25, age loss 0
+    // 50 left on shelf -> holding 25, flat age loss 50x$1 = 50
     expect(r.productionCost).toBe(2500);
     expect(r.transportCost).toBe(1000);
     expect(r.revenue).toBe(4000);
     expect(r.holdingCost).toBe(25);
-    expect(r.ageLossCost).toBe(0);
-    expect(r.profit).toBe(475);
+    expect(r.ageLossCost).toBe(50);
+    expect(r.profit).toBe(425);
     expect(r.fillRate).toBe(0.5); // fulfilled 200 of 400 ordered units
-    expect(alpha.budget).toBe(100_475);
+    expect(alpha.budget).toBe(100_425);
     expect(alpha.inventory.S1).toEqual([{ qty: 50, age: 1 }]);
   });
 
@@ -345,10 +345,11 @@ describe('edge economics', () => {
       orders: { S1: 0, S2: 0 }, // customers buy nothing -> pure cost month
     });
     const r = s.teams[0].results[0];
-    // budget: 1000 - 2500 - 1000 - 125 holding = -2625, interest 2% = 52.5
+    // budget: 1000 - 2500 - 1000 - 125 holding - 250 age loss = -2875,
+    // interest 2% = 57.5
     expect(r.holdingCost).toBe(125);
-    expect(r.overdraftInterest).toBe(52.5);
-    expect(s.teams[0].budget).toBe(-2677.5);
+    expect(r.overdraftInterest).toBe(57.5);
+    expect(s.teams[0].budget).toBe(-2932.5);
   });
 
   it('blocks production plans beyond the overdraft limit', () => {
@@ -466,13 +467,29 @@ describe('determinism & defaults', () => {
     expect(script()).toEqual(script());
   });
 
-  it('default config: tight capacity forces specialization', () => {
+  it('default config: capacity scales with difficulty', () => {
+    const build = (difficulty: 'easy' | 'medium' | 'hard') =>
+      buildDefaultConfig({ seed: 'x', months: 10, numSkus: 5, difficulty, numCustomers: 5 });
+    const ratio = (cfg: ReturnType<typeof buildDefaultConfig>) =>
+      cfg.lines.reduce((s, l) => s + l.capacityPerMonth, 0) /
+      cfg.skus.reduce((s, k) => s + k.historicalMonthlyDemand, 0);
+    // easy: OVER capacity (overbuild -> age loss lesson); medium: ~95-100%;
+    // hard: scarce -> specialization + trading
+    expect(ratio(build('easy'))).toBeGreaterThan(1);
+    expect(ratio(build('medium'))).toBeCloseTo(0.95, 1);
+    expect(ratio(build('hard'))).toBeCloseTo(0.5, 1);
+  });
+
+  it('default config: age loss depreciates full build cost over shelf life', () => {
     const cfg = buildDefaultConfig({
       seed: 'x', months: 10, numSkus: 5, difficulty: 'medium', numCustomers: 5,
     });
-    const totalCapacity = cfg.lines.reduce((s, l) => s + l.capacityPerMonth, 0);
-    const totalDemand = cfg.skus.reduce((s, k) => s + k.historicalMonthlyDemand, 0);
-    expect(totalCapacity).toBeLessThan(totalDemand);
-    expect(totalCapacity / totalDemand).toBeCloseTo(0.6, 1);
+    for (const sku of cfg.skus) {
+      const lineCosts = sku.allowedLineIds.map(
+        (id) => cfg.lines.find((l) => l.id === id)!.costPerUnit);
+      const mfgCost = lineCosts.reduce((a, b) => a + b, 0) / lineCosts.length;
+      // depreciating every month of the shelf life sums to the build cost
+      expect(sku.ageLossCostPerUnitPerMonth * sku.shelfLifeMonths).toBeCloseTo(mfgCost, 1);
+    }
   });
 });

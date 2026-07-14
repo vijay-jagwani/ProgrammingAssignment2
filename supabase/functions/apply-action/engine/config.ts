@@ -14,9 +14,12 @@ const DIFFICULTY_PRESETS: Record<
   { volatility: number; capacityFactor: number; shelfLifeMonths: number }
 > = {
   // capacityFactor = total line capacity as a share of total baseline demand.
-  // Below 1.0 no team can make everything -> forces specialization + trading.
-  easy: { volatility: 0.1, capacityFactor: 0.75, shelfLifeMonths: 6 },
-  medium: { volatility: 0.25, capacityFactor: 0.6, shelfLifeMonths: 4 },
+  // easy: MORE capacity than demand — the trap is overbuilding: unsold stock
+  //   bleeds value every month (age loss), so excess must be priced to move.
+  // medium: capacity ≈ demand — covering everything takes a near-perfect plan.
+  // hard: scarce capacity — no team can make everything; specialize and trade.
+  easy: { volatility: 0.1, capacityFactor: 1.25, shelfLifeMonths: 6 },
+  medium: { volatility: 0.25, capacityFactor: 0.95, shelfLifeMonths: 4 },
   hard: { volatility: 0.4, capacityFactor: 0.5, shelfLifeMonths: 3 },
 };
 
@@ -52,15 +55,22 @@ export function buildDefaultConfig(opts: SetupOptions): GameConfig {
     costPerUnit: 10 + (i % 3),
   }));
 
-  const skus: SkuConfig[] = Array.from({ length: numSkus }, (_, i) => ({
-    id: `S${i + 1}`,
-    name: SKU_NAMES[i] ?? `SKU ${i + 1}`,
+  const skus: SkuConfig[] = Array.from({ length: numSkus }, (_, i) => {
     // each SKU can run on two lines so there is routing flexibility
-    allowedLineIds: [lines[i % numLines].id, lines[(i + 1) % numLines].id],
-    ageLossCostPerUnitPerMonth: 1,
-    shelfLifeMonths: preset.shelfLifeMonths,
-    historicalMonthlyDemand: baselinePerSku,
-  }));
+    const allowed = [lines[i % numLines], lines[(i + 1) % numLines]];
+    const mfgCost = (allowed[0].costPerUnit + allowed[1].costPerUnit) / 2;
+    return {
+      id: `S${i + 1}`,
+      name: SKU_NAMES[i] ?? `SKU ${i + 1}`,
+      allowedLineIds: allowed.map((l) => l.id),
+      // a unit that sits out its whole shelf life loses its full build cost:
+      // monthly depreciation = manufacturing cost / shelf life
+      ageLossCostPerUnitPerMonth:
+        Math.round((mfgCost / preset.shelfLifeMonths) * 100) / 100,
+      shelfLifeMonths: preset.shelfLifeMonths,
+      historicalMonthlyDemand: baselinePerSku,
+    };
+  });
 
   const startingBudget = opts.startingBudget ?? 100_000;
 

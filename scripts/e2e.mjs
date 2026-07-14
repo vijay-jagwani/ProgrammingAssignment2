@@ -49,7 +49,8 @@ async function clickConfirm(page, nameRe) {
 async function main() {
   console.log('Starting local API + web…');
   run('npx', ['tsx', 'scripts/dev-local.ts'], { PORT: '8787' });
-  run('npm', ['run', 'dev', '-w', 'client']);
+  // force the in-memory backend even when a .env.local points at Supabase
+  run('npm', ['run', 'dev', '-w', 'client'], { VITE_BACKEND: 'local' });
   await waitForHttp('http://localhost:8787/api/local/view?code=NONE');
   await waitForHttp('http://localhost:5173/');
 
