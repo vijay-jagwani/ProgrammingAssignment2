@@ -65,48 +65,96 @@ function PhaseControl() {
 
 function OrdersDesk() {
   const { view, act, busy } = useGame();
-  const base = view!.submittedOrders ?? view!.proposedOrders ?? {};
-  const [orders, setOrders] = useState<Record<string, number>>(() => {
-    const init: Record<string, number> = {};
-    for (const s of view!.config.skus) init[s.id] = base[s.id] ?? s.historicalMonthlyDemand;
+  const teams = view!.teamsProgress;
+  const skus = view!.config.skus;
+  const n = Math.max(1, teams.length);
+  const proposed = view!.proposedOrders ?? {};
+
+  // teamId -> skuId -> qty; start from the submitted allocation if present,
+  // otherwise split the proposed market total equally across teams
+  const [alloc, setAlloc] = useState<Record<string, Record<string, number>>>(() => {
+    const init: Record<string, Record<string, number>> = {};
+    for (const t of teams) {
+      init[t.id] = {};
+      for (const s of skus) {
+        init[t.id][s.id] =
+          view!.submittedOrders?.[t.id]?.[s.id] ??
+          Math.round((proposed[s.id] ?? s.historicalMonthlyDemand * n) / n);
+      }
+    }
     return init;
   });
+
+  const priceOf = (teamId: string, skuId: string) =>
+    view!.priceBoard?.find((r) => r.teamId === teamId)?.prices[skuId];
+  const rowTotal = (skuId: string) =>
+    teams.reduce((sum, t) => sum + (alloc[t.id]?.[skuId] ?? 0), 0);
+  const setCell = (teamId: string, skuId: string, v: number) =>
+    setAlloc({ ...alloc, [teamId]: { ...alloc[teamId], [skuId]: v } });
 
   return (
     <div className="card">
       <h2>Customer orders — you are the market</h2>
       <p className="sub">
-        The simulation proposes orders from each customer's shelf position (leftover stock lowers
-        them, stockouts raise them). Confirm or tweak — the same orders hit <b>every</b> team.
+        The market wants <b>baseline × {n} team{n === 1 ? '' : 's'}</b> of each SKU (adjusted by
+        the shelf simulation: leftover stock lowers demand, stockouts raise it). Split each SKU's
+        demand across the teams — each team's price is shown, so you can <b>reward sharper prices
+        with more volume</b>. Splitting evenly reproduces identical orders for everyone.
       </p>
       <table className="data">
         <thead>
-          <tr><th>SKU</th><th className="num">Baseline</th><th className="num">Last month</th>
-            <th className="num">Proposed</th><th className="num">Order</th></tr>
+          <tr>
+            <th>SKU</th>
+            <th className="num">Market demand</th>
+            {teams.map((t) => <th key={t.id} className="num">{t.name}</th>)}
+            <th className="num">Allocated</th>
+          </tr>
         </thead>
         <tbody>
-          {view!.config.skus.map((s) => (
-            <tr key={s.id}>
-              <td>{s.name}</td>
-              <td className="num">{fmtNum(s.historicalMonthlyDemand)}</td>
-              <td className="num">
-                {view!.orderHistory[view!.month - 1]?.[s.id] != null
-                  ? fmtNum(view!.orderHistory[view!.month - 1][s.id]) : '—'}
-              </td>
-              <td className="num">{view!.proposedOrders?.[s.id] != null ? fmtNum(view!.proposedOrders[s.id]) : '—'}</td>
-              <td className="num">
-                <NumInput value={orders[s.id]} softCap={s.historicalMonthlyDemand * 3}
-                  onChange={(v) => setOrders({ ...orders, [s.id]: v })} />
-              </td>
-            </tr>
-          ))}
+          {skus.map((s) => {
+            const total = rowTotal(s.id);
+            const market = proposed[s.id];
+            return (
+              <tr key={s.id}>
+                <td>{s.name}</td>
+                <td className="num">
+                  {market != null ? fmtNum(market) : fmtNum(s.historicalMonthlyDemand * n)}
+                  <div style={{ fontSize: 11, color: 'var(--ink-3, #8a97a0)' }}>
+                    last mo: {view!.orderHistory[view!.month - 1]?.[s.id] != null
+                      ? fmtNum(view!.orderHistory[view!.month - 1][s.id]) : '—'}
+                  </div>
+                </td>
+                {teams.map((t) => {
+                  const p = priceOf(t.id, s.id);
+                  return (
+                    <td key={t.id} className="num">
+                      <NumInput value={alloc[t.id]?.[s.id] ?? 0}
+                        softCap={s.historicalMonthlyDemand * 3} width={86}
+                        onChange={(v) => setCell(t.id, s.id, v)} />
+                      <div style={{ fontSize: 11, color: 'var(--ink-3, #8a97a0)' }}>
+                        {p != null ? `@ ${fmtMoney(p)}` : 'no price'}
+                      </div>
+                    </td>
+                  );
+                })}
+                <td className="num">
+                  <span className={`badge${market != null && total !== market ? '' : ' on'}`}>
+                    {fmtNum(total)}
+                  </span>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
       <div className="row" style={{ marginTop: 12 }}>
-        <ConfirmButton disabled={busy} onConfirm={() => act({ type: 'SUBMIT_ORDERS', orders })}>
+        <ConfirmButton disabled={busy} onConfirm={() => act({ type: 'SUBMIT_ORDERS', allocations: alloc })}>
           Set orders
         </ConfirmButton>
         {view!.submittedOrders && <span className="badge good">✓ Orders set — advance to resolve</span>}
+        <span className="sub" style={{ fontSize: 12 }}>
+          The Allocated column doesn't have to match the proposal — you're the customer.
+        </span>
       </div>
     </div>
   );

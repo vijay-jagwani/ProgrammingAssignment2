@@ -128,25 +128,30 @@ function ForecastPanel() {
     return init;
   });
   const submitted = team.decisions.forecast !== null;
+  const numTeams = Math.max(1, view!.teamsProgress.length);
 
   return (
     <div className="card">
       <h2>Demand forecast — month {view!.month}</h2>
       <p className="sub">
-        What will the market order this month? History is your guide, but customers carry stock and
-        over-order after stockouts.
+        The total market wants <b>baseline × {numTeams} team{numTeams === 1 ? '' : 's'}</b> of each
+        SKU — big enough to absorb every team's output. The customer decides how much to buy{' '}
+        <b>from each team</b>, and sharper prices win more volume. Forecast the share <b>you</b>{' '}
+        expect to sell; customers carry stock and over-order after stockouts.
       </p>
       <table className="data">
         <thead>
           <tr>
-            <th>SKU</th><th className="num">Baseline/mo</th>
-            <th className="num">Actual last month</th><th className="num">Your forecast</th>
+            <th>SKU</th><th className="num">Market/mo ({numTeams} teams)</th>
+            <th className="num">Your share baseline</th>
+            <th className="num">You sold last month</th><th className="num">Your forecast</th>
           </tr>
         </thead>
         <tbody>
           {view!.config.skus.map((s) => (
             <tr key={s.id}>
               <td>{s.name}</td>
+              <td className="num">{fmtNum(s.historicalMonthlyDemand * numTeams)}</td>
               <td className="num">{fmtNum(s.historicalMonthlyDemand)}</td>
               <td className="num">
                 {view!.orderHistory[view!.month - 1]?.[s.id] != null

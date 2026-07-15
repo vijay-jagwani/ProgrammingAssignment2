@@ -189,6 +189,9 @@ function customerSales(config: GameConfig, skuId: string, month: number, custome
  */
 export function computeProposedOrders(state: GameState): Record<string, number> {
   const { config } = state;
+  // The market pool scales with the number of teams: N teams x baseline
+  // demand — big enough to absorb every team's output if it's priced to move.
+  const numTeams = Math.max(1, state.teams.length);
   const proposal: Record<string, number> = {};
   for (const sku of config.skus) {
     const target = sku.historicalMonthlyDemand / config.numCustomers;
@@ -202,9 +205,25 @@ export function computeProposedOrders(state: GameState): Record<string, number> 
         total += Math.max(0, Math.round(target + unmet - shelf));
       }
     }
-    proposal[sku.id] = total;
+    proposal[sku.id] = total * numTeams;
   }
   return proposal;
+}
+
+/** Split total market demand equally across teams (the neutral default). */
+export function splitEqually(
+  state: GameState,
+  totals: Record<string, number>,
+): Record<string, Record<string, number>> {
+  const n = Math.max(1, state.teams.length);
+  const alloc: Record<string, Record<string, number>> = {};
+  for (const team of state.teams) {
+    alloc[team.id] = {};
+    for (const sku of state.config.skus) {
+      alloc[team.id][sku.id] = Math.round((totals[sku.id] ?? 0) / n);
+    }
+  }
+  return alloc;
 }
 
 /** Advance the customer shelf simulation once realized orders are known. */
@@ -340,8 +359,12 @@ function validateProduction(state: GameState, team: TeamState, allocations: Prod
 
 function resolveMonth(state: GameState): void {
   const { config } = state;
-  const orders = state.submittedOrders ?? state.proposedOrders ?? computeProposedOrders(state);
-  state.orderHistory[state.month] = orders;
+  // Per-team allocation of market demand; when the admin didn't submit one,
+  // the proposed total is split equally (identical orders for every team).
+  const alloc =
+    state.submittedOrders ??
+    splitEqually(state, state.proposedOrders ?? computeProposedOrders(state));
+  state.orderHistory[state.month] = alloc;
 
   for (const team of state.teams) {
     const d = team.decisions;
@@ -406,7 +429,8 @@ function resolveMonth(state: GameState): void {
     }
     team.pipeline = stillInTransit;
 
-    // 3. fulfill market orders FIFO by age; shortfall is a lost sale
+    // 3. fulfill THIS team's allocated orders FIFO by age; shortfall is lost
+    const orders = alloc[team.id] ?? {};
     let orderedTotal = 0;
     let fulfilledTotal = 0;
     for (const sku of config.skus) {
@@ -485,7 +509,16 @@ function resolveMonth(state: GameState): void {
     team.results.push(result);
   }
 
-  stepCustomerSim(state, orders);
+  // The shelf simulation tracks a per-team-equivalent slice of the market:
+  // feed it the average allocation so bullwhip dynamics stay scale-free.
+  const n = Math.max(1, state.teams.length);
+  const simOrders: Record<string, number> = {};
+  for (const perTeam of Object.values(alloc)) {
+    for (const [skuId, qty] of Object.entries(perTeam)) {
+      simOrders[skuId] = (simOrders[skuId] ?? 0) + qty / n;
+    }
+  }
+  stepCustomerSim(state, simOrders);
   state.submittedOrders = null;
   state.proposedOrders = null;
 }
@@ -737,16 +770,23 @@ export function reduce(prev: GameState, action: Action): GameState {
     case 'SUBMIT_ORDERS': {
       requirePhase(state, 'ORDERS');
       requireAdmin(state, action.playerId);
-      const orders: Record<string, number> = {};
-      for (const sku of state.config.skus) {
-        const v = action.orders[sku.id];
-        if (!Number.isFinite(v) || v < 0) throw new EngineError('Orders must be non-negative numbers');
-        if (v > sku.historicalMonthlyDemand * 10) {
-          throw new EngineError(`Order for ${sku.name} is more than 10x the baseline — please double-check`);
+      // Per-team allocation: the admin decides how much each team sells.
+      const alloc: Record<string, Record<string, number>> = {};
+      for (const team of state.teams) {
+        const perTeam = action.allocations[team.id] ?? {};
+        alloc[team.id] = {};
+        for (const sku of state.config.skus) {
+          const v = perTeam[sku.id] ?? 0;
+          if (!Number.isFinite(v) || v < 0) throw new EngineError('Orders must be non-negative numbers');
+          if (v > sku.historicalMonthlyDemand * 10) {
+            throw new EngineError(
+              `${team.name}'s order for ${sku.name} is more than 10x the baseline — please double-check`,
+            );
+          }
+          alloc[team.id][sku.id] = Math.round(v);
         }
-        orders[sku.id] = Math.round(v);
       }
-      state.submittedOrders = orders;
+      state.submittedOrders = alloc;
       break;
     }
 

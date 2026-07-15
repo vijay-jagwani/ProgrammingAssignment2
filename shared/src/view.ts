@@ -53,11 +53,13 @@ export interface GameView {
   priceBoard: PriceBoardRow[] | null;
   /** Profit leaderboard — admins always, everyone at game over. */
   profitBoard: ProfitBoardRow[] | null;
-  /** Realized market orders by month (public once a month resolves). */
+  /** Flattened per audience: a team sees ITS OWN realized orders per month;
+   *  admins (and everyone at game over) see the market totals. */
   orderHistory: Record<number, Record<string, number>>;
-  /** Admin only: engine-proposed / admin-submitted orders for this month. */
+  /** Admin only: engine-proposed TOTAL market demand for this month. */
   proposedOrders: Record<string, number> | null;
-  submittedOrders: Record<string, number> | null;
+  /** Admin only: the submitted per-team allocation (teamId -> sku -> qty). */
+  submittedOrders: Record<string, Record<string, number>> | null;
   /** Admin only: event log. */
   log: LogEntry[] | null;
 }
@@ -127,7 +129,7 @@ export function viewFor(state: GameState, audience: Audience): GameView {
     offers,
     priceBoard,
     profitBoard: isAdmin || gameOver ? profitBoard(state) : null,
-    orderHistory: state.orderHistory,
+    orderHistory: flattenOrderHistory(state, myTeamId),
     proposedOrders: isAdmin ? state.proposedOrders : null,
     submittedOrders: isAdmin ? state.submittedOrders : null,
     log: isAdmin ? state.log : null,
@@ -146,4 +148,26 @@ export function audienceFor(state: GameState, playerId: string): Audience {
   if (p.isAdmin) return 'admin';
   if (p.teamId) return `team:${p.teamId}`;
   return 'public';
+}
+
+/** A team sees its own realized orders; everyone else sees market totals. */
+function flattenOrderHistory(
+  state: GameState,
+  myTeamId: string | null,
+): Record<number, Record<string, number>> {
+  const flat: Record<number, Record<string, number>> = {};
+  for (const [m, alloc] of Object.entries(state.orderHistory)) {
+    if (myTeamId && alloc[myTeamId]) {
+      flat[Number(m)] = alloc[myTeamId];
+    } else {
+      const totals: Record<string, number> = {};
+      for (const perTeam of Object.values(alloc)) {
+        for (const [skuId, qty] of Object.entries(perTeam)) {
+          totals[skuId] = (totals[skuId] ?? 0) + qty;
+        }
+      }
+      flat[Number(m)] = totals;
+    }
+  }
+  return flat;
 }

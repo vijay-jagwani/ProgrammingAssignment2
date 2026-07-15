@@ -89,6 +89,7 @@ function playMonth(
     aPrices?: Record<string, number>;
     bPrices?: Record<string, number>;
     orders?: Record<string, number>;
+    allocations?: Record<string, Record<string, number>>;
     duringTrading?: Action[];
   },
 ): GameState {
@@ -106,7 +107,15 @@ function playMonth(
   s = reduce(s, { type: 'ADVANCE_PHASE', playerId: 'adm' }); // -> TRADING
   s = apply(s, opts.duringTrading ?? []);
   s = reduce(s, { type: 'ADVANCE_PHASE', playerId: 'adm' }); // -> ORDERS
-  if (opts.orders) s = reduce(s, { type: 'SUBMIT_ORDERS', playerId: 'adm', orders: opts.orders });
+  if (opts.allocations) {
+    s = reduce(s, { type: 'SUBMIT_ORDERS', playerId: 'adm', allocations: opts.allocations });
+  } else if (opts.orders) {
+    // same orders for both teams — preserves the identical-demand scenarios
+    s = reduce(s, {
+      type: 'SUBMIT_ORDERS', playerId: 'adm',
+      allocations: { T1: opts.orders, T2: opts.orders },
+    });
+  }
   s = reduce(s, { type: 'ADVANCE_PHASE', playerId: 'adm' }); // resolve -> RESULTS
   return s;
 }
@@ -178,12 +187,32 @@ describe('month 1 economics (hand-computed)', () => {
     expect(alpha.inventory.S1).toEqual([{ qty: 50, age: 1 }]);
   });
 
+  it('market pool: admin can allocate demand unevenly across teams', () => {
+    const s = playMonth(start, {
+      aProd: [{ lineId: 'L1', skuId: 'S1', qty: 250 }],
+      bProd: [{ lineId: 'L2', skuId: 'S2', qty: 250 }],
+      allocations: { T1: { S1: 150, S2: 0 }, T2: { S1: 50, S2: 200 } },
+    });
+    const [alpha, beta] = s.teams;
+    expect(alpha.results[0].bySku.S1.ordered).toBe(150);
+    expect(alpha.results[0].bySku.S1.fulfilled).toBe(150);
+    expect(beta.results[0].bySku.S1.ordered).toBe(50);
+    expect(beta.results[0].bySku.S1.fulfilled).toBe(0); // Beta made no S1
+    expect(beta.results[0].bySku.S2.fulfilled).toBe(200);
+    // a team's view shows its own realized orders; the admin sees totals
+    expect(viewFor(s, 'team:T1').orderHistory[1]).toEqual({ S1: 150, S2: 0 });
+    expect(viewFor(s, 'admin').orderHistory[1]).toEqual({ S1: 200, S2: 200 });
+  });
+
   it('both teams face identical realized orders', () => {
     const [alpha, beta] = month1.teams;
     for (const sku of ['S1', 'S2']) {
       expect(alpha.results[0].bySku[sku].ordered).toBe(beta.results[0].bySku[sku].ordered);
     }
-    expect(month1.orderHistory[1]).toEqual({ S1: 200, S2: 200 });
+    expect(month1.orderHistory[1]).toEqual({
+      T1: { S1: 200, S2: 200 },
+      T2: { S1: 200, S2: 200 },
+    });
   });
 
   it('price floor is production + transport + holding, and is enforced', () => {
@@ -245,7 +274,7 @@ describe('month 1 economics (hand-computed)', () => {
       { type: 'SUBMIT_PRICES', playerId: 'a4', prices: { S1: 20, S2: 16.5 } },
       { type: 'ADVANCE_PHASE', playerId: 'adm' }, // -> TRADING
       { type: 'ADVANCE_PHASE', playerId: 'adm' }, // -> ORDERS
-      { type: 'SUBMIT_ORDERS', playerId: 'adm', orders: { S1: 200, S2: 0 } },
+      { type: 'SUBMIT_ORDERS', playerId: 'adm', allocations: { T1: { S1: 200, S2: 0 }, T2: { S1: 200, S2: 0 } } },
       { type: 'ADVANCE_PHASE', playerId: 'adm' }, // resolve month 1
     ]);
     const alpha = s.teams[0];
@@ -267,7 +296,7 @@ describe('month 1 economics (hand-computed)', () => {
       { type: 'SUBMIT_PRICES', playerId: 'a4', prices: { S1: 20, S2: 16.5 } },
       { type: 'ADVANCE_PHASE', playerId: 'adm' }, // -> TRADING
       { type: 'ADVANCE_PHASE', playerId: 'adm' }, // ORDERS
-      { type: 'SUBMIT_ORDERS', playerId: 'adm', orders: { S1: 50, S2: 0 } },
+      { type: 'SUBMIT_ORDERS', playerId: 'adm', allocations: { T1: { S1: 50, S2: 0 }, T2: { S1: 50, S2: 0 } } },
       { type: 'ADVANCE_PHASE', playerId: 'adm' }, // resolve month 2
     ]);
     // the 50 interplant units arrived and sold in month 2
@@ -313,7 +342,7 @@ describe('month 2: trading settlement', () => {
     // resolve the month: trade amounts appear in both teams' results
     t = apply(t, [
       { type: 'ADVANCE_PHASE', playerId: 'adm' }, // -> ORDERS
-      { type: 'SUBMIT_ORDERS', playerId: 'adm', orders: { S1: 200, S2: 200 } },
+      { type: 'SUBMIT_ORDERS', playerId: 'adm', allocations: { T1: { S1: 200, S2: 200 }, T2: { S1: 200, S2: 200 } } },
       { type: 'ADVANCE_PHASE', playerId: 'adm' }, // resolve
     ]);
     expect(t.teams[0].results[1].tradeSells).toBe(1500);
@@ -406,7 +435,8 @@ describe('demand generation', () => {
       { type: 'ADVANCE_PHASE', playerId: 'adm' },
     ]);
     expect(s.phase).toBe('ORDERS');
-    expect(s.proposedOrders).toEqual({ S1: 200, S2: 200 });
+    // proposal is the TOTAL market pool: per-team baseline x 2 teams
+    expect(s.proposedOrders).toEqual({ S1: 400, S2: 400 });
   });
 });
 

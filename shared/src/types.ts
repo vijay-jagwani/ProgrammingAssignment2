@@ -208,12 +208,13 @@ export interface GameState {
   players: PlayerInfo[];
   teams: TeamState[];
   tradeOffers: TradeOffer[];
-  /** Engine-proposed market orders for the current ORDERS phase, per SKU. */
+  /** Engine-proposed TOTAL market demand for the current ORDERS phase, per
+   *  SKU (baseline × number of teams, adjusted by the shelf simulation). */
   proposedOrders: Record<string, number> | null;
-  /** Admin-confirmed market orders for the current ORDERS phase, per SKU. */
-  submittedOrders: Record<string, number> | null;
-  /** Realized market orders by month (same for every team). */
-  orderHistory: Record<number, Record<string, number>>;
+  /** Admin-confirmed allocation of market demand: teamId -> skuId -> qty. */
+  submittedOrders: Record<string, Record<string, number>> | null;
+  /** Realized orders by month: month -> teamId -> skuId -> qty. */
+  orderHistory: Record<number, Record<string, Record<string, number>>>;
   customerSim: CustomerShelf;
   log: LogEntry[];
 }
@@ -234,7 +235,7 @@ export type Action =
   | { type: 'PROPOSE_TRADE'; playerId: string; sellerTeamId: string; skuId: string; qty: number; unitPrice: number; note?: string }
   | { type: 'RESPOND_TRADE'; playerId: string; offerId: string; accept: boolean }
   | { type: 'CANCEL_TRADE'; playerId: string; offerId: string }
-  | { type: 'SUBMIT_ORDERS'; playerId: string; orders: Record<string, number> }
+  | { type: 'SUBMIT_ORDERS'; playerId: string; allocations: Record<string, Record<string, number>> }
   | { type: 'ADVANCE_PHASE'; playerId: string };
 
 export class EngineError extends Error {}

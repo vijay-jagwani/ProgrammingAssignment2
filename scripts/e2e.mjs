@@ -144,9 +144,9 @@ async function main() {
 
   // orders — under-order so Alpha keeps stock to trade in month 2
   await admin.getByRole('heading', { name: /Customer orders/ }).waitFor();
+  // allocation grid: one input per SKU x team (2 SKUs x 2 teams = 4 cells)
   const orderInputs = admin.locator('.card:has(h2:text("Customer orders")) input.num');
-  await orderInputs.nth(0).fill('50');
-  await orderInputs.nth(1).fill('50');
+  for (let i = 0; i < 4; i++) await orderInputs.nth(i).fill('50');
   await clickConfirm(admin, /Set orders/);
   await admin.getByText('✓ Orders set').waitFor();
   await clickConfirm(admin, /Lock orders & resolve month/);

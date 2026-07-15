@@ -88,7 +88,7 @@
     <div class="phase"><div class="n">3</div><div class="body"><div class="name">Transport</div><div class="who">Transport Manager acts · you wait &amp; advance</div><div class="act">Teams split each SKU between truckload (arrives now) and interplant (cheaper, arrives next month). Advance when done.</div></div></div>
     <div class="phase"><div class="n">4</div><div class="body"><div class="name">Pricing</div><div class="who">Customer Ops acts · you wait &amp; advance</div><div class="act">Teams set prices above the cost floor. Advancing reveals every team’s prices on the board.</div></div></div>
     <div class="phase"><div class="n">5</div><div class="body"><div class="name">Price reveal &amp; trading</div><div class="who">CEOs act · you wait &amp; advance</div><div class="act">Prices are public. CEOs negotiate make-vs-buy trades with each other. Give them a few minutes — this is the richest discussion of the round. Advance to close the market.</div></div></div>
-    <div class="phase"><div class="n">6</div><div class="body"><div class="name">Customer orders — <em>this is you</em></div><div class="who">You act</div><div class="act">You are the market. The simulation proposes each SKU’s order (it reacts to prior stockouts and overstock); confirm or tweak. The same orders hit <b>every</b> team, so it’s a fair test. Month 1: customers want everything on the shelf.</div></div></div>
+    <div class="phase"><div class="n">6</div><div class="body"><div class="name">Customer orders — <em>this is you</em></div><div class="who">You act</div><div class="act">You are the market. The simulation proposes each SKU’s <b>total</b> demand — baseline × number of teams, reacting to prior stockouts and overstock — and you <b>split it across teams</b>. Each team’s price is shown next to its box: reward sharper prices with more volume, or split evenly for identical orders. Month 1: customers want everything on the shelf.</div></div></div>
     <div class="phase"><div class="n">7</div><div class="body"><div class="name">Resolution</div><div class="who">The engine · automatic on advance</div><div class="act">Advancing settles the month: sales, lost sales (stockouts), inventory aging and shelf-life write-offs, holding and transport costs, overdraft interest, and each team’s P&amp;L.</div></div></div>
     <div class="phase"><div class="n">8</div><div class="body"><div class="name">Results</div><div class="who">Whole team reviews · you facilitate</div><div class="act">Teams see forecast vs actual, fill rate, and the P&amp;L breakdown. <b>Pause here and debrief</b> (see below) before starting the next month.</div></div></div>
 
@@ -96,7 +96,7 @@
     <ul>
       <li><b>Trust the proposal, mostly.</b> The simulated demand already models the bullwhip — stocked-out customers over-order next month, overstocked ones under-order. Confirming it usually gives the best learning.</li>
       <li><b>Want drama?</b> Spike or crash one SKU’s order to see who forecasted well and who’s caught with the wrong stock.</li>
-      <li><b>Keep it fair.</b> Whatever you set applies to all teams equally — differences on the leaderboard come from decisions, not luck.</li>
+      <li><b>Let price win volume.</b> You decide how much to buy from each team — shifting volume toward the cheapest shelf is what real customers do, and it makes overstocked teams cut prices to move excess. An even split keeps the classic “fair test” mode.</li>
     </ul>
 
     <h2>Debrief script (the learning happens here)</h2>

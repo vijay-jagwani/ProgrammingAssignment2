@@ -165,7 +165,7 @@ export function HowItWorks() {
           <li><b>Host a game</b> above and share the 6-character code. Co-facilitators join and you promote them (admins run the market, they can’t be on a team).</li>
           <li><b>Players join</b>, form teams of five, and claim roles. Two people on one device? Use <b>Switch player</b>. Aim for 2+ teams so the make-vs-buy market comes alive.</li>
           <li><b>Drive each phase</b>: wait for the ✓ marks, then advance. Unsubmitted decisions fall back to safe defaults, so a quiet seat never blocks the game.</li>
-          <li><b>Be the market</b> in the Orders phase — confirm or tweak the simulation’s proposed demand. The same orders hit every team.</li>
+          <li><b>Be the market</b> in the Orders phase — the simulation proposes total demand (baseline × number of teams); you split it across teams. Reward sharper prices with more volume, or split evenly for identical orders.</li>
           <li><b>Debrief on Results</b>: forecast accuracy, fill rate, and the P&L breakdown. Budget 10–15 minutes per month — the arguing is where the learning happens.</li>
         </ol>
       </div>

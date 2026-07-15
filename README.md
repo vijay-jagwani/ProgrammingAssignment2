@@ -26,7 +26,8 @@ A player may hold several roles, so short-handed teams still work.
 
 1. **Forecast** → 2. **Production** → 3. **Transport** → 4. **Pricing** →
 5. **Price reveal + CEO trading** → 6. **Customer orders** (facilitators
-confirm simulation-proposed orders — identical for every team) →
+split simulation-proposed market demand — baseline × number of teams —
+across teams; sharper prices can win more volume) →
 7. **Resolution** (sales, lost sales, aging, expiry, holding costs, overdraft
 interest) → 8. **Results**.
 
@@ -35,8 +36,9 @@ auto-generated learnings (stockout losses, forecast misses, trade activity).
 
 Design choices that keep it fair and instructive:
 
-- **Shared demand**: every team faces the same realized orders — the
-  leaderboard measures decisions, not luck.
+- **One market pool**: total demand = baseline × number of teams, so the
+  market can absorb every team's output. Facilitators allocate it across
+  teams — split evenly it's a pure fair test, or let price win volume.
 - **Capacity scales with difficulty**: Easy has *more* capacity than demand
   (the overstock/age-loss lesson), Medium sits at 95–100% of demand, and
   Hard is scarce — specialization and trading emerge naturally.
