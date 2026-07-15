@@ -733,6 +733,7 @@ export function reduce(prev: GameState, action: Action): GameState {
         qty: action.qty,
         unitPrice: round2(action.unitPrice),
         status: 'pending',
+        awaiting: 'seller',
         note: action.note?.slice(0, 140),
       });
       break;
@@ -743,13 +744,18 @@ export function reduce(prev: GameState, action: Action): GameState {
       const { team } = requireRole(state, action.playerId, 'CEO');
       const offer = state.tradeOffers.find((o) => o.id === action.offerId);
       if (!offer || offer.status !== 'pending') throw new EngineError('Offer is no longer open');
-      if (offer.sellerTeamId !== team.id) throw new EngineError('Only the selling team CEO can respond');
+      // after a counter, the OTHER side's CEO is the one who must respond
+      const awaitedTeamId =
+        (offer.awaiting ?? 'seller') === 'seller' ? offer.sellerTeamId : offer.buyerTeamId;
+      if (awaitedTeamId !== team.id) {
+        throw new EngineError("It is the other team's turn to respond to this offer");
+      }
       if (!action.accept) {
         offer.status = 'rejected';
         break;
       }
       const buyer = getTeam(state, offer.buyerTeamId);
-      const seller = team;
+      const seller = getTeam(state, offer.sellerTeamId);
       const cost = offer.qty * offer.unitPrice;
       if (inventoryUnits(seller, offer.skuId) < offer.qty) {
         throw new EngineError('Your team no longer has enough stock on hand for this trade');
@@ -764,6 +770,30 @@ export function reduce(prev: GameState, action: Action): GameState {
       offer.status = 'accepted';
       const skuName = state.config.skus.find((s) => s.id === offer.skuId)?.name ?? offer.skuId;
       log(state, `Trade: ${buyer.name} bought ${offer.qty} x ${skuName} from ${seller.name} at ${offer.unitPrice}/unit.`);
+      break;
+    }
+
+    case 'COUNTER_TRADE': {
+      requirePhase(state, 'TRADING');
+      const { team } = requireRole(state, action.playerId, 'CEO');
+      const offer = state.tradeOffers.find((o) => o.id === action.offerId);
+      if (!offer || offer.status !== 'pending') throw new EngineError('Offer is no longer open');
+      const side = (offer.awaiting ?? 'seller') === 'seller' ? offer.sellerTeamId : offer.buyerTeamId;
+      if (side !== team.id) {
+        throw new EngineError("It is the other team's turn to respond to this offer");
+      }
+      if (!Number.isInteger(action.qty) || action.qty <= 0) {
+        throw new EngineError('Counter quantity must be a positive whole number');
+      }
+      const capC = round2(referenceCost(state.config, offer.skuId) * state.config.maxTradePriceMultiplier);
+      if (!(action.unitPrice > 0) || action.unitPrice > capC) {
+        throw new EngineError(`Counter unit price must be between 0 and ${capC} (anti-collusion cap)`);
+      }
+      offer.qty = action.qty;
+      offer.unitPrice = round2(action.unitPrice);
+      if (action.note !== undefined) offer.note = action.note.slice(0, 140);
+      // the ball goes back to the other side
+      offer.awaiting = (offer.awaiting ?? 'seller') === 'seller' ? 'buyer' : 'seller';
       break;
     }
 

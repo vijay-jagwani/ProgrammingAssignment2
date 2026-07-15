@@ -183,6 +183,8 @@ export interface TradeOffer {
   qty: number;
   unitPrice: number;
   status: 'pending' | 'accepted' | 'rejected' | 'cancelled' | 'expired';
+  /** Whose CEO must respond next. Counters flip this. Default: 'seller'. */
+  awaiting?: 'seller' | 'buyer';
   note?: string;
 }
 
@@ -234,6 +236,7 @@ export type Action =
   | { type: 'SUBMIT_PRICES'; playerId: string; prices: Record<string, number> }
   | { type: 'PROPOSE_TRADE'; playerId: string; sellerTeamId: string; skuId: string; qty: number; unitPrice: number; note?: string }
   | { type: 'RESPOND_TRADE'; playerId: string; offerId: string; accept: boolean }
+  | { type: 'COUNTER_TRADE'; playerId: string; offerId: string; qty: number; unitPrice: number; note?: string }
   | { type: 'CANCEL_TRADE'; playerId: string; offerId: string }
   | { type: 'SUBMIT_ORDERS'; playerId: string; allocations: Record<string, Record<string, number>> }
   | { type: 'ADVANCE_PHASE'; playerId: string };

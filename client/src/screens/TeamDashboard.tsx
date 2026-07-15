@@ -134,6 +134,10 @@ function ForecastPanel() {
   });
   const submitted = team.decisions.forecast !== null;
   const numTeams = Math.max(1, view!.teamsProgress.length);
+  const arrivingOf = (skuId: string) =>
+    team.pipeline
+      .filter((sh) => sh.skuId === skuId && sh.arrivesMonth <= view!.month)
+      .reduce((s, sh) => s + sh.qty, 0);
 
   return (
     <div className="card">
@@ -149,7 +153,10 @@ function ForecastPanel() {
           <tr>
             <th>SKU</th><th className="num">Market/mo ({numTeams} teams)</th>
             <th className="num">Your share baseline</th>
-            <th className="num">You sold last month</th><th className="num">Your forecast</th>
+            <th className="num">You sold last month</th>
+            <th className="num">On shelf now</th>
+            <th className="num">Arriving this month</th>
+            <th className="num">Your forecast</th>
           </tr>
         </thead>
         <tbody>
@@ -162,6 +169,8 @@ function ForecastPanel() {
                 {view!.orderHistory[view!.month - 1]?.[s.id] != null
                   ? fmtNum(view!.orderHistory[view!.month - 1][s.id]) : '—'}
               </td>
+              <td className="num">{fmtNum(unitsOf(team, s.id))}</td>
+              <td className="num">{fmtNum(arrivingOf(s.id))}</td>
               <td className="num">
                 <NumInput value={fc[s.id]} softCap={s.historicalMonthlyDemand * 2}
                   onChange={(v) => setFc({ ...fc, [s.id]: v })} />
@@ -212,23 +221,45 @@ function ProductionPanel() {
   return (
     <div className="card">
       <h2>Production plan — month {view!.month}</h2>
-      <div className="callout" style={{
-        background: 'var(--wash, rgba(42,120,214,0.08))', border: '1px solid var(--grid)',
-        borderRadius: 10, padding: '10px 14px', marginBottom: 12,
-      }}>
-        <b>📈 Demand forecast:</b> this month your Demand Planner expects{' '}
-        {config.skus.map((s, i) => (
-          <span key={s.id}>{i > 0 && ', '}<b>{fmtNum(forecastOf(s.id))} u</b> of {s.name}</span>
-        ))}
-        {' '}— <b>{fmtNum(totalForecast)} u in total</b>. Your lines can build up to{' '}
-        <b>{fmtNum(totalCapacity)} u</b>.{' '}
+      <h3 style={{ marginTop: 4 }}>📈 What the market needs from you</h3>
+      <table className="data" style={{ marginBottom: 6 }}>
+        <thead>
+          <tr>
+            <th>SKU</th>
+            <th className="num">Forecast demand</th>
+            <th className="num">On shelf now</th>
+            <th className="num">Arriving this month</th>
+            <th className="num">Gap to build</th>
+          </tr>
+        </thead>
+        <tbody>
+          {config.skus.map((s) => {
+            const f = forecastOf(s.id);
+            const onHand = unitsOf(team, s.id);
+            const arriving = team.pipeline
+              .filter((sh) => sh.skuId === s.id && sh.arrivesMonth <= view!.month)
+              .reduce((sum, sh) => sum + sh.qty, 0);
+            const gap = Math.max(0, f - onHand - arriving);
+            return (
+              <tr key={s.id}>
+                <td>{s.name}</td>
+                <td className="num">{fmtNum(f)}</td>
+                <td className="num">{fmtNum(onHand)}</td>
+                <td className="num">{fmtNum(arriving)}</td>
+                <td className="num"><b>{fmtNum(gap)}</b></td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <p className="sub" style={{ marginBottom: 12 }}>
+        Gap to build = forecast − stock already on shelf − stock arriving this month.{' '}
         {totalForecast === 0
-          ? 'No forecast was submitted — check with your Demand Planner before building.'
+          ? 'No forecast submitted yet — check with your Demand Planner before building.'
           : surplus >= 0
-            ? `That's enough to cover the whole forecast — but anything you build beyond demand sits on the shelf, losing value every month (age loss), so only overbuild what you plan to sell.`
-            : `That's ${fmtNum(-surplus)} u short of the forecast — you can't make everything, so prioritize your winners and let your CEO buy the rest from other teams.`}
-      </div>
-      <p className="sub">Allocate units to lines below. Each line shows its capacity and unit cost.</p>
+            ? `Your lines can make ${fmtNum(totalCapacity)} u total — enough to cover the whole forecast, but units built beyond demand lose value every month (age loss).`
+            : `Your lines can make ${fmtNum(totalCapacity)} u total — ${fmtNum(-surplus)} u short of the forecast, so prioritize winners and let your CEO buy the rest.`}
+      </p>
       {config.lines.map((line) => {
         const used = usedOn(line.id);
         const over = used > line.capacityPerMonth;
@@ -457,6 +488,11 @@ function TradingPanel() {
 
   const myOffers = view!.offers.filter((o) => o.month === view!.month);
   const cap = Math.round(referenceCost(config, skuId) * config.maxTradePriceMultiplier * 100) / 100;
+  // inline counter-offer editor: which offer is being countered, with what
+  const [counter, setCounter] = useState<{ offerId: string; qty: number; price: number } | null>(null);
+  const onHandOf = (id: string) => (team.inventory[id] ?? []).reduce((s, b) => s + b.qty, 0);
+  const transitOf = (id: string) =>
+    team.pipeline.filter((sh) => sh.skuId === id).reduce((s, sh) => s + sh.qty, 0);
 
   return (
     <div className="card">
@@ -465,6 +501,28 @@ function TradingPanel() {
         Prices are on the board. This is the make-vs-buy window: your CEO can buy stock other teams
         hold right now (arrives instantly by truckload). Sellers can only sell what's physically on hand.
       </p>
+
+      <h3 style={{ marginTop: 4 }}>Your position — for quick decisions</h3>
+      <table className="data" style={{ marginBottom: 14 }}>
+        <thead>
+          <tr><th>SKU</th><th className="num">On hand (sellable)</th>
+            <th className="num">In transit</th><th className="num">Ref. cost/u</th>
+            <th className="num">Your price/u</th></tr>
+        </thead>
+        <tbody>
+          {config.skus.map((s) => (
+            <tr key={s.id}>
+              <td>{s.name}</td>
+              <td className="num">{fmtNum(onHandOf(s.id))}</td>
+              <td className="num">{fmtNum(transitOf(s.id))}</td>
+              <td className="num">{fmtMoney(referenceCost(config, s.id))}</td>
+              <td className="num">
+                {team.decisions.prices?.[s.id] != null ? fmtMoney(team.decisions.prices[s.id]) : '—'}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
 
       {isCEO ? (
         <div className="stack" style={{ marginBottom: 14 }}>
@@ -516,6 +574,10 @@ function TradingPanel() {
               const other = view!.teamsProgress.find(
                 (t) => t.id === (buying ? o.sellerTeamId : o.buyerTeamId))?.name ?? '?';
               const skuName = config.skus.find((s) => s.id === o.skuId)?.name ?? o.skuId;
+              const awaitedTeamId =
+                (o.awaiting ?? 'seller') === 'seller' ? o.sellerTeamId : o.buyerTeamId;
+              const myMove = isCEO && o.status === 'pending' && awaitedTeamId === team.id;
+              const countering = counter?.offerId === o.id;
               return (
                 <tr key={o.id}>
                   <td>
@@ -527,15 +589,21 @@ function TradingPanel() {
                   <td className="num">{fmtMoney(o.qty * o.unitPrice)}</td>
                   <td>
                     <span className={`badge${o.status === 'accepted' ? ' good' : o.status === 'pending' ? ' on' : ''}`}>
-                      {o.status}
+                      {o.status === 'pending'
+                        ? `pending — ${awaitedTeamId === team.id ? 'your move' : 'their move'}`
+                        : o.status}
                     </span>
                   </td>
                   <td>
-                    {isCEO && o.status === 'pending' && !buying && (
+                    {myMove && !countering && (
                       <span className="row">
                         <button className="small primary" disabled={busy}
                           onClick={() => act({ type: 'RESPOND_TRADE', offerId: o.id, accept: true })}>
                           Accept
+                        </button>
+                        <button className="small" disabled={busy}
+                          onClick={() => setCounter({ offerId: o.id, qty: o.qty, price: o.unitPrice })}>
+                          Counter
                         </button>
                         <button className="small" disabled={busy}
                           onClick={() => act({ type: 'RESPOND_TRADE', offerId: o.id, accept: false })}>
@@ -543,7 +611,24 @@ function TradingPanel() {
                         </button>
                       </span>
                     )}
-                    {isCEO && o.status === 'pending' && buying && (
+                    {myMove && countering && (
+                      <span className="row" style={{ alignItems: 'center' }}>
+                        <NumInput value={counter.qty} width={72} min={1}
+                          onChange={(v) => setCounter({ ...counter, qty: v })} />
+                        <NumInput value={counter.price} width={82} step={0.5}
+                          softCap={Math.round(referenceCost(config, o.skuId) * config.maxTradePriceMultiplier * 100) / 100}
+                          onChange={(v) => setCounter({ ...counter, price: v })} />
+                        <button className="small primary" disabled={busy || counter.qty <= 0 || counter.price <= 0}
+                          onClick={() => {
+                            act({ type: 'COUNTER_TRADE', offerId: o.id, qty: counter.qty, unitPrice: counter.price });
+                            setCounter(null);
+                          }}>
+                          Send {fmtNum(counter.qty)} @ {fmtMoney(counter.price)}
+                        </button>
+                        <button className="small" disabled={busy} onClick={() => setCounter(null)}>✕</button>
+                      </span>
+                    )}
+                    {isCEO && o.status === 'pending' && buying && !myMove && (
                       <button className="small danger" disabled={busy}
                         onClick={() => act({ type: 'CANCEL_TRADE', offerId: o.id })}>
                         Cancel

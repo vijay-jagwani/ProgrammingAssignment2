@@ -364,6 +364,41 @@ describe('month 2: trading settlement', () => {
     expect(t.teams[1].results[1].bySku.S1.fulfilled).toBe(50);
   });
 
+  it('counter-offer: responder changes terms, ball flips to the other CEO', () => {
+    // month 1: Alpha builds 250 S1, both teams get 200 orders -> Alpha keeps 50
+    let s = playMonth(reduce(lobby(), { type: 'START_GAME', playerId: 'adm' }), {
+      aProd: [{ lineId: 'L1', skuId: 'S1', qty: 250 }],
+      aPrices: { S1: 20, S2: 16.5 },
+      orders: { S1: 200, S2: 0 },
+    });
+    s = apply(s, [
+      { type: 'ADVANCE_PHASE', playerId: 'adm' }, // -> month 2 FORECAST
+      { type: 'ADVANCE_PHASE', playerId: 'adm' },
+      { type: 'ADVANCE_PHASE', playerId: 'adm' },
+      { type: 'ADVANCE_PHASE', playerId: 'adm' },
+      { type: 'ADVANCE_PHASE', playerId: 'adm' }, // -> TRADING
+      { type: 'PROPOSE_TRADE', playerId: 'b5', sellerTeamId: 'T1', skuId: 'S1', qty: 20, unitPrice: 15 },
+    ]);
+    const id = s.tradeOffers[0].id;
+    expect(s.tradeOffers[0].awaiting).toBe('seller');
+
+    // seller CEO counters: fewer units, higher price -> now the BUYER must respond
+    s = reduce(s, { type: 'COUNTER_TRADE', playerId: 'a5', offerId: id, qty: 10, unitPrice: 20 });
+    expect(s.tradeOffers[0]).toMatchObject({ qty: 10, unitPrice: 20, awaiting: 'buyer', status: 'pending' });
+    // the seller can no longer accept their own counter
+    expect(() =>
+      reduce(s, { type: 'RESPOND_TRADE', playerId: 'a5', offerId: id, accept: true }),
+    ).toThrow(/other team's turn/);
+
+    // buyer CEO accepts the countered terms -> settles at 10 @ 20
+    s = reduce(s, { type: 'RESPOND_TRADE', playerId: 'b5', offerId: id, accept: true });
+    expect(s.tradeOffers[0].status).toBe('accepted');
+    const units = (t: number, sku: string) =>
+      (s.teams[t].inventory[sku] ?? []).reduce((sum: number, b: { qty: number }) => sum + b.qty, 0);
+    expect(units(1, 'S1')).toBe(10); // Beta received the goods
+    expect(units(0, 'S1')).toBe(40); // Alpha kept the rest of its 50
+  });
+
   it('caps trade prices to prevent collusion', () => {
     let t = apply(toMonth2, [
       { type: 'ADVANCE_PHASE', playerId: 'adm' },

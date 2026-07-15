@@ -166,11 +166,19 @@ async function main() {
   await bob.getByText('pending').first().waitFor(); // offer registered server-side
   step('Beta proposed to buy 10 units from Alpha');
   await alice.getByText(/wants your/).waitFor(); // reached Alice via realtime
-  await alice.getByRole('button', { name: 'Accept' }).click();
+  // Alice COUNTERS: same qty, higher price (15.5 -> 17)
+  await alice.getByRole('button', { name: 'Counter' }).click();
+  const counterInputs = alice.locator('table.data input.num'); // only the counter row has table inputs
+  await counterInputs.nth(1).fill('17');
+  await alice.screenshot({ path: `${SHOTS}/4b-counter-offer.png`, fullPage: true });
+  await alice.getByRole('button', { name: /Send 10 @/ }).click();
+  await bob.getByText('pending — your move').waitFor(); // ball flipped to the buyer
+  step('Alice countered 10 @ $17 — offer flipped to Beta CEO');
+  await bob.getByRole('button', { name: 'Accept' }).click();
   await alice.getByText('accepted').first().waitFor();
   await bob.getByText('accepted').first().waitFor();
   await bob.screenshot({ path: `${SHOTS}/5-trade-accepted.png`, fullPage: true });
-  step('Trade: Beta bought 10 units from Alpha, accepted live across tabs');
+  step('Trade settled at the countered terms (10 @ $17), live across tabs');
   await clickConfirm(admin, /Advance phase/); // -> ORDERS
   await clickConfirm(admin, /Lock orders & resolve month/);
   await clickConfirm(admin, /Start month 3/);
