@@ -707,7 +707,10 @@ export function PriceBoardCard() {
   return (
     <div className="card">
       <h3>Price board — month {view.month}</h3>
-      <p className="sub">Sorted cheapest average first. Demand is shared; price is margin, not volume.</p>
+      <p className="sub">
+        Sorted cheapest average first. The customer sees this board when splitting market demand
+        across teams — sharper prices can win more volume.
+      </p>
       <table className="data">
         <thead>
           <tr>
