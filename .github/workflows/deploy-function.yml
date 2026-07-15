@@ -1,0 +1,25 @@
+# Deploys the apply-action edge function to Supabase whenever the function
+# code changes on master (or on demand from the Actions tab).
+# Requires one repository secret: SUPABASE_ACCESS_TOKEN (sbp_...), added at
+# Settings -> Secrets and variables -> Actions -> New repository secret.
+name: Deploy edge function
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'supabase/functions/**'
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Deploy apply-action
+        run: supabase functions deploy apply-action --project-ref wygzhbjmrnysufndphxq
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
