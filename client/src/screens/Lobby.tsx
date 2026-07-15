@@ -101,7 +101,8 @@ export function Lobby() {
           <h3>Facilitator controls</h3>
           <p className="sub">
             Promote co-admins (they act as customers with you — an admin can't be on a team).
-            Start once every team has its key roles claimed; unclaimed roles fall back to safe defaults.
+            Roles don't block the start: any teammate can act for a role nobody claimed, and a
+            role that never submits gets a safe default.
           </p>
           <div className="row" style={{ marginBottom: 10 }}>
             {view.players.filter((p) => !p.isAdmin && !p.teamId).map((p) => (
@@ -129,10 +130,17 @@ export function Lobby() {
 
       <div className="card">
         <h3>Market setup</h3>
+        <p className="sub" style={{ marginBottom: 8 }}>
+          Total market demand = baseline × number of teams — with{' '}
+          <b>{view.teamsProgress.length || 'no'} team{view.teamsProgress.length === 1 ? '' : 's'}</b>{' '}
+          joined, the market wants{' '}
+          <b>{fmtNum((view.config.skus[0]?.historicalMonthlyDemand ?? 0) * Math.max(1, view.teamsProgress.length))} u
+          /SKU/mo</b> (updates as teams form). The facilitator splits it across teams each month.
+        </p>
         <table className="data">
           <thead>
             <tr>
-              <th>SKU</th><th>Lines</th><th className="num">Baseline demand/mo</th>
+              <th>SKU</th><th>Lines</th><th className="num">Baseline/mo per team</th>
               <th className="num">Shelf life</th><th className="num">Age loss $/u/mo</th>
             </tr>
           </thead>

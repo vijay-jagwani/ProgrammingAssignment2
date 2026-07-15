@@ -153,6 +153,19 @@ describe('lobby rules', () => {
     ).toThrow(/cannot kick an admin/);
   });
 
+  it('vacant roles fall back to any teammate; claimed roles stay exclusive', () => {
+    let s = lobby();
+    // a1 holds Demand Planner on Alpha — a2 may NOT act for it
+    s = reduce(s, { type: 'START_GAME', playerId: 'adm' });
+    expect(() =>
+      reduce(s, { type: 'SUBMIT_FORECAST', playerId: 'a2', forecast: { S1: 100, S2: 100 } }),
+    ).toThrow(/belongs to the DEMAND_PLANNER/);
+    // kick a1 -> the role is vacant -> a2 (Production Planner) can act for it
+    s = reduce(s, { type: 'KICK_PLAYER', playerId: 'adm', targetPlayerId: 'a1' });
+    s = reduce(s, { type: 'SUBMIT_FORECAST', playerId: 'a2', forecast: { S1: 100, S2: 100 } });
+    expect(s.teams[0].decisions.forecast).toEqual({ S1: 100, S2: 100 });
+  });
+
   it('teams are capped at 5 players', () => {
     let s = lobby();
     s = reduce(s, { type: 'JOIN', playerId: 'x1', name: 'Extra', asAdmin: false });

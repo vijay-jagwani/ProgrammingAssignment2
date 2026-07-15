@@ -83,7 +83,12 @@ function ActivePanel() {
   if (!view || !me || !view.myTeam) return null;
   const phase = view.phase;
   const owner = PHASE_ROLE[phase];
-  const iOwn = owner ? me.roles.includes(owner) : false;
+  // If nobody on the team claimed the phase's role, every teammate can act
+  // (mirrors the engine's vacant-role fallback).
+  const claimedOnTeam = owner
+    ? view.players.some((p) => p.teamId === me.teamId && p.roles.includes(owner))
+    : false;
+  const iOwn = owner ? me.roles.includes(owner) || !claimedOnTeam : false;
 
   if (phase === 'FORECAST' && iOwn) return <ForecastPanel key={`f${view.month}`} />;
   if (phase === 'PRODUCTION' && iOwn) return <ProductionPanel key={`p${view.month}`} />;
@@ -440,7 +445,9 @@ function TradingPanel() {
   const { view, me, act, busy } = useGame();
   const team = view!.myTeam!;
   const config = view!.config;
-  const isCEO = me!.roles.includes('CEO' as Role);
+  const ceoClaimed = view!.players.some(
+    (p) => p.teamId === team.id && p.roles.includes('CEO' as Role));
+  const isCEO = me!.roles.includes('CEO' as Role) || !ceoClaimed;
   const otherTeams = view!.teamsProgress.filter((t) => t.id !== team.id);
   const [sellerId, setSellerId] = useState(otherTeams[0]?.id ?? '');
   const [skuId, setSkuId] = useState(config.skus[0].id);

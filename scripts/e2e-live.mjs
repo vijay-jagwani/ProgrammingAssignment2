@@ -57,6 +57,13 @@ async function main() {
   const code = (await admin.locator('.gamecode').textContent()).trim();
   step(`Admin created game ${code} on ${BASE}`);
 
+  // Alice claims all 5 roles; Bob claims ONLY CEO — the rest of Beta's
+  // phases must still work via the vacant-role fallback (bug report:
+  // "demand page not getting active on one team").
+  const roleSets = {
+    Alpha: ['Demand Planner', 'Production Planner', 'Transport Manager', 'Customer Ops Manager', 'CEO'],
+    Beta: ['CEO'],
+  };
   for (const [page, name, team] of [[alice, 'Alice', 'Alpha'], [bob, 'Bob', 'Beta']]) {
     await page.getByPlaceholder('e.g. Priya').fill(name);
     await page.getByPlaceholder('e.g. K7M2QX').fill(code);
@@ -66,11 +73,11 @@ async function main() {
     await page.getByRole('button', { name: 'Create team' }).click();
     const myCard = page.locator('.card', { has: page.locator('h3', { hasText: team }) });
     await myCard.locator('.badge.on', { hasText: name }).waitFor();
-    for (const role of ['Demand Planner', 'Production Planner', 'Transport Manager', 'Customer Ops Manager', 'CEO']) {
+    for (const role of roleSets[team]) {
       await myCard.locator('.rolechip', { hasText: role }).first().click();
       await myCard.locator('.rolechip.mine', { hasText: role }).waitFor();
     }
-    step(`${name} joined in own tab, created ${team}, claimed all 5 roles`);
+    step(`${name} joined in own tab, created ${team}, claimed: ${roleSets[team].join(', ')}`);
   }
 
   await admin.locator('.card', { hasText: 'Facilitator controls' }).waitFor();
@@ -85,7 +92,11 @@ async function main() {
     await clickConfirm(page, /Submit forecast/);
     await page.getByText('✓ Submitted', { exact: false }).first().waitFor();
   }
-  step('Both teams forecast');
+  step('Both teams forecast — incl. Bob, who never claimed Demand Planner');
+  // market column: baseline 200/team x 2 teams = 400
+  await bob.getByText('Market/mo (2 teams)').waitFor();
+  await bob.locator('td', { hasText: '400' }).first().waitFor();
+  step('Demand page shows market total = baseline x number of teams (400)');
   await clickConfirm(admin, /Advance phase/);
 
   for (const [page, which] of [[alice, 0], [bob, 1]]) {

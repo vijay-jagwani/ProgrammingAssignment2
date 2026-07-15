@@ -50,7 +50,16 @@ function requireAdmin(state: GameState, playerId: string): PlayerInfo {
 function requireRole(state: GameState, playerId: string, role: Role): { player: PlayerInfo; team: TeamState } {
   const p = getPlayer(state, playerId);
   if (!p.teamId) throw new EngineError('You are not on a team');
-  if (!p.roles.includes(role)) throw new EngineError(`This action belongs to the ${role} role`);
+  if (!p.roles.includes(role)) {
+    // Vacant-role fallback: if NOBODY on the team claimed this role, any
+    // teammate may act for it — a short-handed team is never stuck.
+    const claimedByTeammate = state.players.some(
+      (q) => q.teamId === p.teamId && q.roles.includes(role),
+    );
+    if (claimedByTeammate) {
+      throw new EngineError(`This action belongs to the ${role} role`);
+    }
+  }
   return { player: p, team: getTeam(state, p.teamId) };
 }
 
