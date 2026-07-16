@@ -178,6 +178,12 @@ async function main() {
   await alice.getByText('accepted').first().waitFor();
   await bob.getByText('accepted').first().waitFor();
   await bob.screenshot({ path: `${SHOTS}/5-trade-accepted.png`, fullPage: true });
+  // CEO signals "done trading" -> facilitator sees the green tick
+  await alice.getByRole('button', { name: /Done trading/ }).click();
+  await admin
+    .locator('.card:has(h2:text("Price Reveal & Trading")) .badge.good', { hasText: 'Alpha' })
+    .waitFor();
+  step('Alpha marked done trading — facilitator sees the green light');
   step('Trade settled at the countered terms (10 @ $17), live across tabs');
   await clickConfirm(admin, /Advance phase/); // -> ORDERS
   await clickConfirm(admin, /Lock orders & resolve month/);

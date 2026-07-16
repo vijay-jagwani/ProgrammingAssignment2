@@ -78,6 +78,20 @@ function producedBySku(team: TeamState): Record<string, number> {
   return m;
 }
 
+/**
+ * Units a team can sell in a trade RIGHT NOW: stock on the shelf plus this
+ * month's truckload-bound production (it lands this month anyway) that has
+ * not already been pre-sold to another team.
+ */
+export function tradableUnits(team: TeamState, skuId: string): number {
+  const onHand = (team.inventory[skuId] ?? []).reduce((s, b) => s + b.qty, 0);
+  const made = producedBySku(team)[skuId] ?? 0;
+  const split = team.decisions.transport?.[skuId];
+  const plannedTl = split ? Math.min(made, Math.max(0, split.truckload)) : made;
+  const presold = team.presold?.[skuId] ?? 0;
+  return onHand + Math.max(0, plannedTl - presold);
+}
+
 /** Blended transport cost per unit for a SKU given its truckload/interplant split. */
 function splitTransportUnitCost(config: GameConfig, split?: { truckload: number; interplant: number }): number {
   if (!split) return config.transport.truckload.costPerUnit;
@@ -415,8 +429,11 @@ function resolveMonth(state: GameState): void {
       // split the produced units across modes; truckload (1 wk) lands this
       // month, interplant (3 wks) arrives next month. Default: all truckload.
       const split = d.transport?.[skuId] ?? { truckload: qty, interplant: 0 };
-      const tl = Math.min(qty, Math.max(0, split.truckload));
+      let tl = Math.min(qty, Math.max(0, split.truckload));
       const ip = Math.max(0, qty - tl); // any remainder ships interplant
+      // units pre-sold in trading were handed to the buyer at settlement:
+      // they never ship, and the seller pays no transport on them
+      tl -= Math.min(tl, team.presold?.[skuId] ?? 0);
       if (tl > 0) {
         result.transportCost += tl * config.transport.truckload.costPerUnit;
         team.pipeline.push({ skuId, qty: tl, mode: 'truckload', arrivesMonth: state.month });
@@ -426,6 +443,8 @@ function resolveMonth(state: GameState): void {
         team.pipeline.push({ skuId, qty: ip, mode: 'interplant', arrivesMonth: state.month + 1 });
       }
     }
+
+    team.presold = {};
 
     // 2. land arrivals due this month
     const stillInTransit = [];
@@ -724,6 +743,13 @@ export function reduce(prev: GameState, action: Action): GameState {
       if (buyer.budget - cost < -state.config.overdraftLimit) {
         throw new EngineError('This trade would exceed your overdraft limit');
       }
+      const sellable = tradableUnits(seller, sku.id);
+      if (sellable < action.qty) {
+        throw new EngineError(
+          `${seller.name} does not have enough ${sku.name} — they can sell at most ` +
+          `${sellable} u right now (shelf + this month's truckload)`,
+        );
+      }
       state.tradeOffers.push({
         id: `TR${state.tradeOffers.length + 1}-M${state.month}`,
         month: state.month,
@@ -757,13 +783,24 @@ export function reduce(prev: GameState, action: Action): GameState {
       const buyer = getTeam(state, offer.buyerTeamId);
       const seller = getTeam(state, offer.sellerTeamId);
       const cost = offer.qty * offer.unitPrice;
-      if (inventoryUnits(seller, offer.skuId) < offer.qty) {
-        throw new EngineError('Your team no longer has enough stock on hand for this trade');
+      if (tradableUnits(seller, offer.skuId) < offer.qty) {
+        throw new EngineError(
+          'The selling team no longer has enough units for this trade (shelf + this month\'s truckload)',
+        );
       }
       if (buyer.budget - cost < -state.config.overdraftLimit) {
         throw new EngineError("The buyer can no longer afford this trade");
       }
-      const batches = takeFifo(seller, offer.skuId, offer.qty);
+      // take shelf stock first (FIFO), then units from this month's
+      // truckload plan — those are marked presold and never ship at resolve
+      const fromShelf = Math.min(inventoryUnits(seller, offer.skuId), offer.qty);
+      const batches = fromShelf > 0 ? takeFifo(seller, offer.skuId, fromShelf) : [];
+      const fromPlan = offer.qty - fromShelf;
+      if (fromPlan > 0) {
+        seller.presold = seller.presold ?? {};
+        seller.presold[offer.skuId] = (seller.presold[offer.skuId] ?? 0) + fromPlan;
+        batches.push({ qty: fromPlan, age: 0 });
+      }
       addBatches(buyer, offer.skuId, batches);
       buyer.budget = round2(buyer.budget - cost);
       seller.budget = round2(seller.budget + cost);
@@ -794,6 +831,13 @@ export function reduce(prev: GameState, action: Action): GameState {
       if (action.note !== undefined) offer.note = action.note.slice(0, 140);
       // the ball goes back to the other side
       offer.awaiting = (offer.awaiting ?? 'seller') === 'seller' ? 'buyer' : 'seller';
+      break;
+    }
+
+    case 'MARK_TRADING_DONE': {
+      requirePhase(state, 'TRADING');
+      const { team } = requireRole(state, action.playerId, 'CEO');
+      team.decisions.tradingDone = action.done;
       break;
     }
 

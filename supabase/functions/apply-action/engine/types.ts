@@ -136,6 +136,8 @@ export interface MonthDecisions {
   production: ProductionAllocation[] | null;
   transport: Record<string, TransportSplit> | null;
   prices: Record<string, number> | null;
+  /** CEO's "we're done trading" flag — the facilitator's green light. */
+  tradingDone?: boolean;
 }
 
 export interface SkuMonthOutcome {
@@ -170,6 +172,9 @@ export interface TeamState {
   cumulativeProfit: number;
   inventory: Record<string, Batch[]>; // skuId -> batches (FIFO, oldest first)
   pipeline: Shipment[]; // in-transit, not yet sellable
+  /** Units of this month's truckload plan already sold to other teams in
+   *  trading — they transfer at settlement and never ship at resolution. */
+  presold?: Record<string, number>;
   decisions: MonthDecisions;
   results: MonthResult[];
 }
@@ -238,6 +243,7 @@ export type Action =
   | { type: 'RESPOND_TRADE'; playerId: string; offerId: string; accept: boolean }
   | { type: 'COUNTER_TRADE'; playerId: string; offerId: string; qty: number; unitPrice: number; note?: string }
   | { type: 'CANCEL_TRADE'; playerId: string; offerId: string }
+  | { type: 'MARK_TRADING_DONE'; playerId: string; done: boolean }
   | { type: 'SUBMIT_ORDERS'; playerId: string; allocations: Record<string, Record<string, number>> }
   | { type: 'ADVANCE_PHASE'; playerId: string };
 

@@ -255,18 +255,47 @@ describe('month 1 economics (hand-computed)', () => {
     ).toThrow(/cannot be manufactured/);
   });
 
-  it('trading in month 1 fails: no stock on hand yet (production lands at resolution)', () => {
+  it('month-1 trades sell from the truckload plan; interplant stock cannot be sold', () => {
     let s = apply(start, [
       { type: 'ADVANCE_PHASE', playerId: 'adm' },
       { type: 'SUBMIT_PRODUCTION', playerId: 'a2', allocations: [{ lineId: 'L1', skuId: 'S1', qty: 250 }] },
-      { type: 'ADVANCE_PHASE', playerId: 'adm' },
+      { type: 'ADVANCE_PHASE', playerId: 'adm' }, // -> TRANSPORT
+      // 200 truckload (tradeable this month) + 50 interplant (not tradeable)
+      { type: 'SUBMIT_TRANSPORT', playerId: 'a3', split: { S1: { truckload: 200, interplant: 50 }, S2: { truckload: 0, interplant: 0 } } },
       { type: 'ADVANCE_PHASE', playerId: 'adm' },
       { type: 'ADVANCE_PHASE', playerId: 'adm' }, // -> TRADING
-      { type: 'PROPOSE_TRADE', playerId: 'b5', sellerTeamId: 'T1', skuId: 'S1', qty: 50, unitPrice: 20 },
     ]);
+    // asking for more than the truckload plan fails AT PROPOSE time
     expect(() =>
-      reduce(s, { type: 'RESPOND_TRADE', playerId: 'a5', offerId: s.tradeOffers[0].id, accept: true }),
-    ).toThrow(/enough stock on hand/);
+      reduce(s, { type: 'PROPOSE_TRADE', playerId: 'b5', sellerTeamId: 'T1', skuId: 'S1', qty: 201, unitPrice: 20 }),
+    ).toThrow(/can sell at most 200/);
+    // asking for an SKU the seller never produced also fails at propose
+    expect(() =>
+      reduce(s, { type: 'PROPOSE_TRADE', playerId: 'b5', sellerTeamId: 'T1', skuId: 'S2', qty: 10, unitPrice: 20 }),
+    ).toThrow(/can sell at most 0/);
+
+    // a feasible month-1 trade settles from the plan
+    s = apply(s, [
+      { type: 'PROPOSE_TRADE', playerId: 'b5', sellerTeamId: 'T1', skuId: 'S1', qty: 50, unitPrice: 20 },
+      { type: 'RESPOND_TRADE', playerId: 'a5', offerId: 'TR1-M1', accept: true },
+    ]);
+    const [alpha, beta] = s.teams;
+    expect((beta.inventory.S1 ?? []).reduce((sum, b) => sum + b.qty, 0)).toBe(50);
+    expect(alpha.presold?.S1).toBe(50);
+    expect(beta.budget).toBe(100_000 - 1000);
+    expect(alpha.budget).toBe(100_000 + 1000);
+
+    // at resolution the pre-sold 50 never ship: Alpha ships 150 truckload
+    // (600) + 50 interplant (75) = 675 transport, not 875
+    s = apply(s, [
+      { type: 'ADVANCE_PHASE', playerId: 'adm' }, // -> ORDERS
+      { type: 'SUBMIT_ORDERS', playerId: 'adm', allocations: { T1: { S1: 100, S2: 0 }, T2: { S1: 0, S2: 0 } } },
+      { type: 'ADVANCE_PHASE', playerId: 'adm' }, // resolve
+    ]);
+    const r = s.teams[0].results[0];
+    expect(r.transportCost).toBe(675);
+    expect(r.bySku.S1.fulfilled).toBe(100); // 150 landed, 100 sold
+    expect(s.teams[0].presold).toEqual({});
   });
 
   it('split shipment: truckload lands this month, interplant arrives next month', () => {

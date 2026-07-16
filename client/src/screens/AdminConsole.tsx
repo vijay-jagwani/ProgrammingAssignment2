@@ -38,7 +38,8 @@ function PhaseControl() {
   const phaseKey = view.phase as keyof typeof ADVANCE_HINT;
   const submittedFlag = {
     FORECAST: 'forecast', PRODUCTION: 'production', TRANSPORT: 'transport', PRICING: 'prices',
-  }[view.phase as string] as 'forecast' | 'production' | 'transport' | 'prices' | undefined;
+    TRADING: 'trading',
+  }[view.phase as string] as 'forecast' | 'production' | 'transport' | 'prices' | 'trading' | undefined;
 
   return (
     <div className="card">

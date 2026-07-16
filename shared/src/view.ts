@@ -18,6 +18,7 @@ export interface TeamProgress {
     production: boolean;
     transport: boolean;
     prices: boolean;
+    trading: boolean;
   };
 }
 
@@ -93,6 +94,7 @@ export function viewFor(state: GameState, audience: Audience): GameView {
       production: t.decisions.production !== null,
       transport: t.decisions.transport !== null,
       prices: t.decisions.prices !== null,
+      trading: t.decisions.tradingDone === true,
     },
   }));
 

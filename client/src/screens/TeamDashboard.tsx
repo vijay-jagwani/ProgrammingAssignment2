@@ -493,20 +493,34 @@ function TradingPanel() {
   const onHandOf = (id: string) => (team.inventory[id] ?? []).reduce((s, b) => s + b.qty, 0);
   const transitOf = (id: string) =>
     team.pipeline.filter((sh) => sh.skuId === id).reduce((s, sh) => s + sh.qty, 0);
+  // this month's truckload-bound production is sellable in trades too
+  const producedOf = (id: string) =>
+    (team.decisions.production ?? []).filter((a) => a.skuId === id).reduce((s, a) => s + a.qty, 0);
+  const truckloadPlanOf = (id: string) => {
+    const made = producedOf(id);
+    const sp = team.decisions.transport?.[id];
+    const tl = sp ? Math.min(made, Math.max(0, sp.truckload)) : made;
+    return Math.max(0, tl - (team.presold?.[id] ?? 0));
+  };
+  const sellableOf = (id: string) => onHandOf(id) + truckloadPlanOf(id);
 
   return (
     <div className="card">
       <h2>Price reveal & trading — month {view!.month}</h2>
       <p className="sub">
         Prices are on the board. This is the make-vs-buy window: your CEO can buy stock other teams
-        hold right now (arrives instantly by truckload). Sellers can only sell what's physically on hand.
+        can deliver now. Sellers can sell what's on the shelf <b>plus this month's truckload-bound
+        production</b> (it lands this month anyway) — but not interplant stock still in transit.
       </p>
 
       <h3 style={{ marginTop: 4 }}>Your position — for quick decisions</h3>
       <table className="data" style={{ marginBottom: 14 }}>
         <thead>
-          <tr><th>SKU</th><th className="num">On hand (sellable)</th>
-            <th className="num">In transit</th><th className="num">Ref. cost/u</th>
+          <tr><th>SKU</th><th className="num">On shelf</th>
+            <th className="num">+ Truckload this month</th>
+            <th className="num">= Can sell now</th>
+            <th className="num">Interplant (not tradeable)</th>
+            <th className="num">Ref. cost/u</th>
             <th className="num">Your price/u</th></tr>
         </thead>
         <tbody>
@@ -514,6 +528,8 @@ function TradingPanel() {
             <tr key={s.id}>
               <td>{s.name}</td>
               <td className="num">{fmtNum(onHandOf(s.id))}</td>
+              <td className="num">{fmtNum(truckloadPlanOf(s.id))}</td>
+              <td className="num"><b>{fmtNum(sellableOf(s.id))}</b></td>
               <td className="num">{fmtNum(transitOf(s.id))}</td>
               <td className="num">{fmtMoney(referenceCost(config, s.id))}</td>
               <td className="num">
@@ -523,6 +539,17 @@ function TradingPanel() {
           ))}
         </tbody>
       </table>
+      {isCEO && (
+        <div className="row" style={{ marginBottom: 14 }}>
+          <button className={`small${team.decisions.tradingDone ? '' : ' primary'}`} disabled={busy}
+            onClick={() => act({ type: 'MARK_TRADING_DONE', done: !team.decisions.tradingDone })}>
+            {team.decisions.tradingDone ? 'Resume trading' : '✓ Done trading — signal the facilitator'}
+          </button>
+          {team.decisions.tradingDone && (
+            <span className="badge good">✓ Marked done — the facilitator sees your green light</span>
+          )}
+        </div>
+      )}
 
       {isCEO ? (
         <div className="stack" style={{ marginBottom: 14 }}>
