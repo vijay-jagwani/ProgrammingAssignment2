@@ -1,0 +1,3 @@
+# SPA fallback for CLI/prebuilt deploys (mirrors netlify.toml). Real files
+# like /facilitator-guide.html are served directly; only misses rewrite.
+/*  /index.html  200

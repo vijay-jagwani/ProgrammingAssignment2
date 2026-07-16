@@ -1,0 +1,40 @@
+# Builds the site on GitHub (free for public repos) and pushes the finished
+# files to Netlify — a "prebuilt" deploy that consumes ZERO Netlify build
+# minutes. Netlify's own builder should be set to "Stop builds" in the
+# dashboard so master pushes don't also trigger a paid build there.
+# Requires one repository secret: NETLIFY_AUTH_TOKEN (a Netlify personal
+# access token from app.netlify.com -> User settings -> Applications).
+name: Deploy site to Netlify
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'client/**'
+      - 'shared/**'
+      - 'package*.json'
+      - 'netlify.toml'
+      - '.github/workflows/deploy-site.yml'
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build client
+        run: npm run build
+        env:
+          # public-by-design values (same ones committed in SETUP.md);
+          # the service key is NOT here — it lives only in Supabase secrets
+          VITE_SUPABASE_URL: https://wygzhbjmrnysufndphxq.supabase.co
+          VITE_SUPABASE_ANON_KEY: sb_publishable_4Z1tw4ItY3MG5VOU5RC4IQ_Ff1Mt0xs
+      - name: Deploy prebuilt files to Netlify
+        run: npx --yes netlify-cli deploy --prod --dir client/dist --site millsops
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
