@@ -35,6 +35,7 @@ jobs:
           VITE_SUPABASE_URL: https://wygzhbjmrnysufndphxq.supabase.co
           VITE_SUPABASE_ANON_KEY: sb_publishable_4Z1tw4ItY3MG5VOU5RC4IQ_Ff1Mt0xs
       - name: Deploy prebuilt files to Netlify
-        run: npx --yes netlify-cli deploy --prod --dir client/dist --site millsops
+        # --filter picks the workspace project in this monorepo
+        run: npx --yes netlify-cli deploy --prod --dir client/dist --site millsops --filter @scg/client
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
