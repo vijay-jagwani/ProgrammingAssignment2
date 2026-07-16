@@ -35,7 +35,13 @@ jobs:
           VITE_SUPABASE_URL: https://wygzhbjmrnysufndphxq.supabase.co
           VITE_SUPABASE_ANON_KEY: sb_publishable_4Z1tw4ItY3MG5VOU5RC4IQ_Ff1Mt0xs
       - name: Deploy prebuilt files to Netlify
-        # --filter picks the workspace project in this monorepo
-        run: npx --yes netlify-cli deploy --prod --dir client/dist --site millsops --filter @scg/client
+        # Resolve the site ID from its URL (the display name can differ),
+        # then publish. --filter picks the workspace project in the monorepo.
+        run: |
+          SITE_ID=$(npx --yes netlify-cli api listSites --data '{}' \
+            | jq -r '.[] | select(.ssl_url == "https://millsops.netlify.app") | .id')
+          if [ -z "$SITE_ID" ]; then echo "millsops site not found for this token"; exit 1; fi
+          echo "site id: $SITE_ID"
+          npx --yes netlify-cli deploy --prod --dir client/dist --site "$SITE_ID" --filter @scg/client
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
