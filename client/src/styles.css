@@ -60,7 +60,7 @@ body {
 @media (min-width: 1280px) { .shell { max-width: 1320px; } }
 .topbar {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-  padding: 12px 0 14px; position: sticky; top: 0; z-index: 10; background: var(--page);
+  padding: 12px 0 14px;
 }
 .topbar h1 { font-size: 18px; margin: 0; letter-spacing: 0.2px; }
 .topbar .spacer { flex: 1; }
@@ -419,3 +419,19 @@ details.market summary .sub { margin: 0; font-weight: 400; }
 .smap-market { fill: var(--surface-1); stroke: var(--delta-good); stroke-width: 2.5; }
 .smap-truck rect { fill: var(--accent); stroke: var(--surface-1); stroke-width: 2; }
 @media (prefers-reduced-motion: reduce) { .smap-truck animateMotion { display: none; } }
+
+/* map parts: demand meeting, factory, two transport lanes, market flows */
+.smap-road-thin { fill: none; stroke: var(--axis); stroke-width: 3; stroke-dasharray: 6 6; }
+.smap-road.tl { stroke: var(--accent); opacity: 0.22; }
+.smap-road.ip { stroke: var(--grid); }
+.smap-road-dash { fill: none; stroke: var(--ink-3); stroke-width: 2; stroke-dasharray: 3 7; stroke-linecap: round; }
+.smap-lane { font-size: 12px; font-weight: 650; fill: var(--ink-2); }
+.smap-table { fill: var(--surface-1); stroke: var(--accent); stroke-width: 3; }
+.smap-table-centre { fill: var(--accent); }
+.smap-seat { fill: var(--surface-1); stroke: var(--accent); stroke-width: 2; }
+.smap-factory { fill: var(--surface-1); stroke: var(--ink-2); stroke-width: 2.5; }
+.smap-factory-roof { fill: none; stroke: var(--ink-2); stroke-width: 2.5; stroke-linejoin: round; }
+.smap-factory-stack { fill: var(--ink-2); }
+.smap-factory-door { fill: var(--wash); stroke: var(--ink-3); stroke-width: 1.5; }
+.smap-flow { fill: none; stroke: var(--accent); opacity: 0.35; stroke-linecap: round; }
+.smap-label, .smap-sub, .smap-lane, .smap-title { paint-order: stroke; stroke: var(--wash); stroke-width: 5px; stroke-linejoin: round; }

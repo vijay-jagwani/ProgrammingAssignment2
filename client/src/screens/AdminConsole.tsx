@@ -3,6 +3,7 @@ import { PHASE_LABELS } from '@scg/shared';
 import { useGame } from '../state';
 import { ConfirmButton, NumInput, fmtMoney, fmtNum, pct } from '../components/ui';
 import { PriceBoardCard } from './TeamDashboard';
+import { MarketMap } from '../components/SupplyMap';
 
 const ADVANCE_HINT: Record<string, string> = {
   FORECAST: 'Teams without a forecast get last actuals/baseline.',
@@ -19,6 +20,7 @@ export function AdminConsole() {
   if (!view) return null;
   return (
     <div>
+      <MarketMap />
       {view.phase !== 'ORDERS' && <PhaseControl />}
       {view.phase === 'ORDERS' && <OrdersDesk key={`o${view.month}`} />}
       {view.priceBoard && <PriceBoardCard />}
