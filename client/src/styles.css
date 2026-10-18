@@ -472,3 +472,4 @@ details.market summary .sub { margin: 0; font-weight: 400; }
 .smap-desk.on .smap-desk-disc { stroke: var(--accent); stroke-width: 3; }
 .smap-desk-icon { color: var(--ink-2); }
 .smap-desk.on .smap-desk-icon { color: var(--accent); }
+.price-sub { font-size: 11px; color: var(--ink-3); font-weight: 400; }

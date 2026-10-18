@@ -553,6 +553,34 @@ function TradingPanel() {
           ))}
         </tbody>
       </table>
+      <h3>What the other teams can sell now</h3>
+      <p className="sub">Units each team can deliver this month (shelf plus truckload plan), with its price.</p>
+      <div className="table-scroll">
+        <table className="data" style={{ marginBottom: 14 }}>
+          <thead>
+            <tr>
+              <th>SKU</th>
+              {otherTeams.map((t) => <th key={t.id} className="num">{t.name}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {config.skus.map((s) => (
+              <tr key={s.id}>
+                <td>{s.name}</td>
+                {otherTeams.map((t) => {
+                  const price = view!.priceBoard?.find((r) => r.teamId === t.id)?.prices[s.id];
+                  return (
+                    <td key={t.id} className="num">
+                      <b>{fmtNum(view!.availability?.[t.id]?.[s.id] ?? 0)}</b> u
+                      {price != null && <div className="price-sub">@ {fmtMoney(price)}</div>}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       {isCEO && (
         <div className="row" style={{ marginBottom: 14 }}>
           <button className={`small${team.decisions.tradingDone ? '' : ' primary'}`} disabled={busy}

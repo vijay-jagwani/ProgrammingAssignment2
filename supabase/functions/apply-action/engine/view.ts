@@ -1,3 +1,4 @@
+import { tradableUnits } from './engine.ts';
 import type {
   GameConfig,
   GameMode,
@@ -63,6 +64,9 @@ export interface GameView {
   proposedOrders: Record<string, number> | null;
   /** Admin only: the submitted per-team allocation (teamId -> sku -> qty). */
   submittedOrders: Record<string, Record<string, number>> | null;
+  /** Units each team can deliver right now (shelf plus truckload plan), per SKU.
+   *  Shared with every audience during trading and orders. */
+  availability: Record<string, Record<string, number>> | null;
   /** Admin only: event log. */
   log: LogEntry[] | null;
 }
@@ -138,6 +142,12 @@ export function viewFor(state: GameState, audience: Audience): GameView {
     proposedOrders: isAdmin ? state.proposedOrders : null,
     submittedOrders: isAdmin ? state.submittedOrders : null,
     log: isAdmin ? state.log : null,
+    availability: state.phase === 'TRADING' || state.phase === 'ORDERS'
+      ? Object.fromEntries(state.teams.map((t) => [
+          t.id,
+          Object.fromEntries(state.config.skus.map((sku) => [sku.id, tradableUnits(t, sku.id)])),
+        ]))
+      : null,
   };
 }
 

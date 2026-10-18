@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { PHASE_LABELS, tradableUnits } from '@scg/shared';
+import { PHASE_LABELS } from '@scg/shared';
 import { useGame } from '../state';
 import { ConfirmButton, NumInput, fmtMoney, fmtNum, pct } from '../components/ui';
 import { PriceBoardCard } from './TeamDashboard';
@@ -94,10 +94,7 @@ function OrdersDesk() {
   });
 
   // units each team can sell right now: shelf stock plus this month's truckload plan
-  const availableUnits = (teamId: string, skuId: string) => {
-    const t = view!.allTeams?.find((x) => x.id === teamId);
-    return t ? tradableUnits(t, skuId) : 0;
-  };
+  const availableUnits = (teamId: string, skuId: string) => view!.availability?.[teamId]?.[skuId] ?? 0;
   const priceOf = (teamId: string, skuId: string) =>
     view!.priceBoard?.find((r) => r.teamId === teamId)?.prices[skuId];
   const rowTotal = (skuId: string) =>

@@ -699,3 +699,21 @@ describe('solo mode', () => {
     expect(s.teams.map((t) => t.results[0].bySku.S1.ordered)).toEqual([200, 200, 200]);
   });
 });
+
+describe('trading availability', () => {
+  it('shares each team\'s sellable units with every audience during trading', () => {
+    let s = reduce(lobby(), { type: 'START_GAME', playerId: 'adm' });
+    s = reduce(s, { type: 'ADVANCE_PHASE', playerId: 'adm' }); // PRODUCTION
+    s = reduce(s, { type: 'SUBMIT_PRODUCTION', playerId: 'a2', allocations: [{ lineId: 'L1', skuId: 'S1', qty: 100 }] });
+    s = reduce(s, { type: 'ADVANCE_PHASE', playerId: 'adm' }); // TRANSPORT (defaults to truckload)
+    s = reduce(s, { type: 'ADVANCE_PHASE', playerId: 'adm' }); // PRICING
+    s = reduce(s, { type: 'ADVANCE_PHASE', playerId: 'adm' }); // TRADING
+    expect(viewFor(s, 'team:T2').availability?.T1.S1).toBe(100);
+    expect(viewFor(s, 'team:T2').availability?.T2.S1).toBe(0);
+    expect(viewFor(s, 'public').availability?.T1.S1).toBe(100);
+  });
+
+  it('hides availability before trading opens', () => {
+    expect(viewFor(lobby(), 'admin').availability).toBeNull();
+  });
+});
