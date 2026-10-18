@@ -30,8 +30,8 @@ export function TeamDashboard() {
 
   return (
     <div>
-      <SupplyMap />
       <CommandRow control={control} />
+      <SupplyMap />
       <div className="statrow">
         <div className="stat">
           <div className="k">Budget</div>

@@ -21,8 +21,8 @@ export function AdminConsole() {
   if (!view) return null;
   return (
     <div>
-      <MarketMap />
       <CommandRow control={<PhaseControl />} />
+      <MarketMap />
       {view.phase === 'ORDERS' && <OrdersDesk key={`o${view.month}`} />}
       {view.priceBoard && <PriceBoardCard />}
       <TeamsOverview />

@@ -479,7 +479,8 @@ details.market summary .sub { margin: 0; font-weight: 400; }
 .smap-scroll > svg.market-svg { width: auto; height: 34vh; max-width: 100%; min-width: 0; }
 
 /* top row of in-game screens: advance control beside the month status */
-.cmd-row { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(0, 1.6fr); gap: 16px; margin-bottom: 18px; align-items: stretch; }
+.cmd-row { margin-bottom: 18px; }
+.cmd-row > .card { margin-bottom: 0; }
 .cmd-left { display: flex; flex-direction: column; gap: 12px; }
 .cmd-left > .card { margin-bottom: 0; flex: 1; }
 .cmd-right > .gm { margin-bottom: 0; height: 100%; }
@@ -495,7 +496,6 @@ details.market summary .sub { margin: 0; font-weight: 400; }
 .gm-compact .gm-track { min-width: 0; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); }
 .gm-compact .gm-dot { width: 38px; height: 38px; }
 .gm-compact .gm-name, .gm-compact .gm-owner { display: none; }
-@media (max-width: 860px) { .cmd-row { grid-template-columns: 1fr; } }
 
 /* compact interchange map: production lines and their state */
 .smap-lines { fill: var(--surface-1); stroke: var(--axis); stroke-width: 2; }
