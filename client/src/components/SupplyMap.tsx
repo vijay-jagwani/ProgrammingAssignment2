@@ -1,6 +1,8 @@
 import type { TeamState } from '@scg/shared';
+import { PHASE_LABELS } from '@scg/shared';
 import { useGame } from '../state';
 import { fmtMoney, fmtNum } from './ui';
+import { Icon } from './icons';
 
 // The supply network as a map: demand is agreed in a meeting, every production
 // line feeds one factory, two transport lanes (truckload and interplant) carry
@@ -25,7 +27,7 @@ function Truck({ dur, begin = 0, path }: { dur: number; begin?: number; path: st
 }
 
 /** Round table with six seats: where the demand planners agree the forecast. */
-function RoundTable({ x, y }: { x: number; y: number }) {
+function RoundTable({ x, y, active }: { x: number; y: number; active: boolean }) {
   const seats = Array.from({ length: 6 }, (_, i) => {
     const a = (i * Math.PI * 2) / 6 - Math.PI / 2;
     return { cx: x + 48 * Math.cos(a), cy: y + 48 * Math.sin(a) };
@@ -35,6 +37,7 @@ function RoundTable({ x, y }: { x: number; y: number }) {
       {seats.map((s, i) => <circle key={i} cx={s.cx} cy={s.cy} r="8" className="smap-seat" />)}
       <circle cx={x} cy={y} r="32" className="smap-table" />
       <circle cx={x} cy={y} r="11" className="smap-table-centre" />
+      {active && <circle cx={x} cy={y} r="32" className="smap-ring" />}
     </g>
   );
 }
@@ -85,6 +88,14 @@ export function SupplyMap() {
   const sold = last ? sum(Object.values(last.bySku), (r) => r.fulfilled) : 0;
   const ordered = last ? sum(Object.values(last.bySku), (r) => r.ordered) : 0;
 
+  // which part of the network the current phase is working on
+  const phase = view.phase;
+  const demandOn = phase === 'FORECAST';
+  const productionOn = phase === 'PRODUCTION';
+  const transportOn = phase === 'TRANSPORT';
+  const tradeOn = phase === 'TRADING';
+  const customerOn = phase === 'PRICING' || phase === 'ORDERS';
+
   return (
     <section className="smap" aria-label="Your supply network">
       <div className="smap-head">
@@ -93,6 +104,7 @@ export function SupplyMap() {
           <h3>{team.name}</h3>
         </div>
         <div className="smap-stats">
+          <span className="chip now">Now <b>{PHASE_LABELS[phase]}</b></span>
           <span className="chip">Cash <b>{fmtMoney(team.budget)}</b></span>
           {last && (
             <span className={`chip ${last.profit < 0 ? 'bad' : 'good'}`}>
@@ -103,10 +115,10 @@ export function SupplyMap() {
       </div>
 
       <div className="smap-scroll">
-        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Demand meeting, production lines, factory, truckload and interplant routes to customers">
+        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Demand meeting, production lines, factory, trade desk, truckload and interplant routes to customers">
           <rect x="0" y="0" width={W} height={H} rx="22" className="smap-ground" />
 
-          <RoundTable x={DEMAND.x} y={DEMAND.y} />
+          <RoundTable x={DEMAND.x} y={DEMAND.y} active={demandOn} />
           <text x={DEMAND.x} y={DEMAND.y + 72} textAnchor="middle" className="smap-title">Demand meeting</text>
           <text x={DEMAND.x} y={DEMAND.y + 90} textAnchor="middle" className="smap-sub">
             {forecast > 0 ? `forecast ${fmtNum(forecast)} u` : 'forecast not set'}
@@ -123,6 +135,7 @@ export function SupplyMap() {
                 <path d={pathOut} className="smap-road" />
                 <path d={pathOut} className="smap-road-line" />
                 <circle cx={LINE_X} cy={y} r="24" className={`smap-node${units > 0 ? ' live' : ''}`} />
+                {productionOn && <circle cx={LINE_X} cy={y} r="24" className="smap-ring" />}
                 <text x={LINE_X} y={y + 5} textAnchor="middle" className="smap-node-text">{line.id}</text>
                 <text x={LINE_X - 36} y={y - 2} textAnchor="end" className="smap-label">{line.name}</text>
                 <text x={LINE_X - 36} y={y + 14} textAnchor="end" className="smap-sub">
@@ -139,8 +152,18 @@ export function SupplyMap() {
             {fmtNum(producedTotal)} u made · {fmtNum(onShelf)} on shelf · {fmtNum(inTransit)} in transit
           </text>
 
+          {/* CEO trade desk: sits above the factory-to-customer routes */}
+          <g className={`smap-trade${tradeOn ? ' on' : ''}`} transform="translate(600 46)">
+            <circle r="26" className="smap-trade-disc" />
+            {tradeOn && <circle r="26" className="smap-ring" />}
+            <g transform="translate(-12 -12)" className="smap-trade-icon">
+              <Icon name="handshake" size={24} />
+            </g>
+            <text y="50" textAnchor="middle" className="smap-title">CEO trade desk</text>
+          </g>
+
           {/* truckload: fast lane, arrives within a week */}
-          <path d={`M ${FACTORY.x + 46} ${FACTORY.y - 8} C 600 ${FACTORY.y - 40}, 640 ${CUSTOMER.y - 70}, ${CUSTOMER.x - 50} ${CUSTOMER.y - 40}`} className="smap-road tl" />
+          <path d={`M ${FACTORY.x + 46} ${FACTORY.y - 8} C 600 ${FACTORY.y - 40}, 640 ${CUSTOMER.y - 70}, ${CUSTOMER.x - 50} ${CUSTOMER.y - 40}`} className={`smap-road tl${transportOn ? ' active' : ''}`} />
           <path d={`M ${FACTORY.x + 46} ${FACTORY.y - 8} C 600 ${FACTORY.y - 40}, 640 ${CUSTOMER.y - 70}, ${CUSTOMER.x - 50} ${CUSTOMER.y - 40}`} className="smap-road-line" />
           <text x="590" y={FACTORY.y - 74} textAnchor="middle" className="smap-lane tl-text">
             Truckload · {tlWeeks} week{tlWeeks === 1 ? '' : 's'} · {fmtNum(truckload)} u
@@ -150,7 +173,7 @@ export function SupplyMap() {
           )}
 
           {/* interplant: slower, cheaper lane */}
-          <path d={`M ${FACTORY.x + 46} ${FACTORY.y + 14} C 600 ${FACTORY.y + 50}, 640 ${CUSTOMER.y + 80}, ${CUSTOMER.x - 50} ${CUSTOMER.y + 40}`} className="smap-road ip" />
+          <path d={`M ${FACTORY.x + 46} ${FACTORY.y + 14} C 600 ${FACTORY.y + 50}, 640 ${CUSTOMER.y + 80}, ${CUSTOMER.x - 50} ${CUSTOMER.y + 40}`} className={`smap-road ip${transportOn ? ' active' : ''}`} />
           <path d={`M ${FACTORY.x + 46} ${FACTORY.y + 14} C 600 ${FACTORY.y + 50}, 640 ${CUSTOMER.y + 80}, ${CUSTOMER.x - 50} ${CUSTOMER.y + 40}`} className="smap-road-dash" />
           <text x="590" y={FACTORY.y + 104} textAnchor="middle" className="smap-lane ip-text">
             Interplant · {ipWeeks} weeks · {fmtNum(interplant)} u
@@ -159,7 +182,8 @@ export function SupplyMap() {
             <Truck dur={4.6} path={`M ${FACTORY.x + 46} ${FACTORY.y + 14} C 600 ${FACTORY.y + 50}, 640 ${CUSTOMER.y + 80}, ${CUSTOMER.x - 50} ${CUSTOMER.y + 40}`} />
           )}
 
-          <circle cx={CUSTOMER.x} cy={CUSTOMER.y} r={CUSTOMER.r} className="smap-market" />
+          <circle cx={CUSTOMER.x} cy={CUSTOMER.y} r={CUSTOMER.r} className={`smap-market${customerOn ? ' on' : ''}`} />
+          {customerOn && <circle cx={CUSTOMER.x} cy={CUSTOMER.y} r={CUSTOMER.r} className="smap-ring" />}
           <text x={CUSTOMER.x} y={CUSTOMER.y - 4} textAnchor="middle" className="smap-title">Customers</text>
           <text x={CUSTOMER.x} y={CUSTOMER.y + 16} textAnchor="middle" className="smap-sub">
             {last ? `${fmtNum(sold)} of ${fmtNum(ordered)} sold` : 'first month ahead'}
