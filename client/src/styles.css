@@ -503,3 +503,5 @@ details.market summary .sub { margin: 0; font-weight: 400; }
 .smap-line-dot { fill: var(--surface-1); stroke: var(--axis); stroke-width: 2; }
 .smap-line-dot.live { fill: var(--accent); stroke: var(--accent); }
 .smap-compact .smap-head { margin-bottom: 8px; }
+
+.budget-prompt { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }

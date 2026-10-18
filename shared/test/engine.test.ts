@@ -7,7 +7,9 @@ import {
   Role,
   buildDefaultConfig,
   createGame,
+  fitProductionToBudget,
   priceFloor,
+  productionCommitment,
   reduce,
   referenceCost,
   audienceFor,
@@ -755,5 +757,29 @@ describe('solo trading with rival teams', () => {
     const after = reduce(s, { type: 'PROPOSE_TRADE', playerId: 'me', sellerTeamId: rival.id, skuId: 'S1', qty: 10, unitPrice: 0.5 });
     expect(after.tradeOffers.at(-1)?.status).toBe('rejected');
     expect(after.teams[0].budget).toBe(s.teams[0].budget);
+  });
+});
+
+describe('production against the budget', () => {
+  it('counts line costs plus the cheapest transport', () => {
+    expect(productionCommitment(testConfig(), [{ lineId: 'L1', skuId: 'S1', qty: 100 }])).toBe(1150);
+  });
+
+  it('realigns an over-budget plan to the cash on hand, cutting later lines first', () => {
+    const cfg = testConfig();
+    const plan = [{ lineId: 'L1', skuId: 'S1', qty: 300 }, { lineId: 'L2', skuId: 'S2', qty: 300 }];
+    const fitted = fitProductionToBudget(cfg, plan, 2000);
+    expect(fitted).toEqual([{ lineId: 'L1', skuId: 'S1', qty: 173 }]);
+    expect(productionCommitment(cfg, fitted)).toBeLessThanOrEqual(2000);
+  });
+
+  it('cuts a plan to the line capacity even when the cash would allow more', () => {
+    const plan = [{ lineId: 'L1', skuId: 'S1', qty: 400 }];
+    expect(fitProductionToBudget(testConfig(), plan, 100_000)).toEqual([{ lineId: 'L1', skuId: 'S1', qty: 300 }]);
+  });
+
+  it('leaves a plan that fits the cash unchanged', () => {
+    const plan = [{ lineId: 'L1', skuId: 'S1', qty: 100 }];
+    expect(fitProductionToBudget(testConfig(), plan, 100_000)).toEqual(plan);
   });
 });

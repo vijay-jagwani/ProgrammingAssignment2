@@ -696,6 +696,45 @@ function answerRivalOffer(state: GameState, offer: TradeOffer): void {
   }
 }
 
+/** Cash a production plan commits: its line costs plus the cheapest transport, as the engine checks it. */
+export function productionCommitment(config: GameConfig, allocations: ProductionAllocation[]): number {
+  const minTransport = Math.min(config.transport.truckload.costPerUnit, config.transport.interplant.costPerUnit);
+  let cost = 0;
+  let qty = 0;
+  for (const a of allocations) {
+    if (a.qty <= 0) continue;
+    cost += a.qty * (config.lines.find((l) => l.id === a.lineId)?.costPerUnit ?? 0);
+    qty += a.qty;
+  }
+  return round2(cost + qty * minTransport);
+}
+
+/** Cut a plan line by line, in the order given, until it fits the cash on hand and each line's capacity. */
+export function fitProductionToBudget(
+  config: GameConfig,
+  allocations: ProductionAllocation[],
+  cash: number,
+): ProductionAllocation[] {
+  const minTransport = Math.min(config.transport.truckload.costPerUnit, config.transport.interplant.costPerUnit);
+  let room = cash;
+  const capacityLeft: Record<string, number> = Object.fromEntries(
+    config.lines.map((l) => [l.id, l.capacityPerMonth]),
+  );
+  const fitted: ProductionAllocation[] = [];
+  for (const a of allocations) {
+    const line = config.lines.find((l) => l.id === a.lineId);
+    if (!line || a.qty <= 0) continue;
+    const unit = line.costPerUnit + minTransport;
+    const qty = Math.min(a.qty, capacityLeft[line.id], Math.max(0, Math.floor(room / unit)));
+    if (qty > 0) {
+      fitted.push({ ...a, qty });
+      room -= qty * unit;
+      capacityLeft[line.id] -= qty;
+    }
+  }
+  return fitted;
+}
+
 // ------------------------------------------------------------- reducer
 
 export function reduce(prev: GameState, action: Action): GameState {

@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import {
   GameView, PHASE_LABELS, PHASE_ORDER, PHASE_ROLE, ProductionAllocation, Role,
-  ROLE_LABELS, ROLES, TeamState, TransportSplit, priceFloor, referenceCost,
+  ROLE_LABELS, ROLES, TeamState, TransportSplit, fitProductionToBudget, priceFloor,
+  productionCommitment, referenceCost,
 } from '@scg/shared';
 import { useGame } from '../state';
 import { ConfirmButton, NumInput, fmtMoney, fmtNum, pct } from '../components/ui';
@@ -220,13 +221,19 @@ function ProductionPanel() {
   const usedOn = (lineId: string) =>
     Object.entries(alloc).reduce(
       (s, [k, v]) => (k.startsWith(`${lineId}|`) ? s + (v || 0) : s), 0);
-  const totalCost = Object.entries(alloc).reduce((s, [k, v]) => {
-    const line = config.lines.find((l) => l.id === k.split('|')[0]);
-    return s + (line ? (v || 0) * line.costPerUnit : 0);
-  }, 0);
   const allocations: ProductionAllocation[] = Object.entries(alloc)
     .map(([k, qty]) => ({ lineId: k.split('|')[0], skuId: k.split('|')[1], qty: qty || 0 }))
     .filter((a) => a.qty > 0);
+  const commitment = productionCommitment(config, allocations);
+  const overBudget = commitment > team.budget;
+  const [budgetPrompt, setBudgetPrompt] = useState<ProductionAllocation[] | null>(null);
+  const realign = (fitted: ProductionAllocation[]) => {
+    const next: Record<string, number> = {};
+    for (const a of fitted) next[`${a.lineId}|${a.skuId}`] = a.qty;
+    setAlloc(next);
+    setBudgetPrompt(null);
+    act({ type: 'SUBMIT_PRODUCTION', allocations: fitted });
+  };
   const submitted = team.decisions.production !== null;
 
   const forecastOf = (skuId: string) => team.decisions.forecast?.[skuId] ?? 0;
@@ -309,10 +316,34 @@ function ProductionPanel() {
           </div>
         );
       })}
+      {budgetPrompt && (
+        <div className="banner error budget-prompt" role="alertdialog" aria-label="Plan is over budget">
+          <b>This plan costs {fmtMoney(commitment)} and you have {fmtMoney(team.budget)} in cash.</b>
+          <p className="sub" style={{ margin: 0 }}>
+            Realigned, the plan makes {fmtNum(budgetPrompt.reduce((s, a) => s + a.qty, 0))} u for{' '}
+            {fmtMoney(productionCommitment(config, budgetPrompt))}. Each line keeps its place in the order;
+            units past your cash or the line's capacity are cut.
+          </p>
+          <div className="row">
+            <button className="primary" disabled={busy} onClick={() => realign(budgetPrompt)}>
+              Realign and submit
+            </button>
+            <button disabled={busy} onClick={() => setBudgetPrompt(null)}>Edit my plan</button>
+            <button disabled={busy}
+              onClick={() => { setBudgetPrompt(null); act({ type: 'SUBMIT_PRODUCTION', allocations }); }}>
+              Keep my plan (pay overdraft interest)
+            </button>
+          </div>
+        </div>
+      )}
       <div className="row">
-        <ConfirmButton disabled={busy} onConfirm={() => act({ type: 'SUBMIT_PRODUCTION', allocations })}>
-          {submitted ? 'Update plan' : 'Submit plan'} — cost {fmtMoney(totalCost)}
+        <ConfirmButton disabled={busy} onConfirm={() => {
+          if (overBudget) setBudgetPrompt(fitProductionToBudget(config, allocations, team.budget));
+          else act({ type: 'SUBMIT_PRODUCTION', allocations });
+        }}>
+          {submitted ? 'Update plan' : 'Submit plan'} — cost {fmtMoney(commitment)}
         </ConfirmButton>
+        {overBudget && <span className="badge bad">Over budget by {fmtMoney(commitment - team.budget)}</span>}
         {submitted && <span className="badge good">✓ Submitted</span>}
         <span className="badge">Budget {fmtMoney(team.budget)}</span>
       </div>
