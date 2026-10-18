@@ -116,6 +116,12 @@ async function main() {
       throw new Error('Solo month showed the facilitator orders step');
     }
     step(`Month ${m} resolved without a facilitator, orders split across the market`);
+    if (m === 1) {
+      await sam.getByRole('heading', { name: 'How every team did this month' }).waitFor();
+      await sam.getByRole('cell', { name: /Rival 1/ }).first().waitFor();
+      await sam.screenshot({ path: `${SHOTS}/2b-solo-standing-month1.png`, fullPage: true });
+      step('Month 1 standing table lists Sam Co and both rivals');
+    }
     await clickConfirm(sam, m < 3 ? /Start month/ : /Finish game/);
   }
 

@@ -741,14 +741,26 @@ describe('solo trading with rival teams', () => {
     expect(s.teams[1].decisions.tradingDone).toBe(true);
   });
 
-  it('a rival sells at or above its cost floor', () => {
+  it('a rival sells at its own asking price', () => {
     const s = atTrading();
     const rival = s.teams[1];
-    const floor = priceFloor(s, rival, 'S1');
-    const after = reduce(s, { type: 'PROPOSE_TRADE', playerId: 'me', sellerTeamId: rival.id, skuId: 'S1', qty: 10, unitPrice: floor });
+    const ask = rival.decisions.prices!.S1;
+    const after = reduce(s, { type: 'PROPOSE_TRADE', playerId: 'me', sellerTeamId: rival.id, skuId: 'S1', qty: 10, unitPrice: ask });
     expect(after.tradeOffers.at(-1)?.status).toBe('accepted');
     expect(after.teams[0].budget).toBeLessThan(s.teams[0].budget);
     expect(after.teams[1].budget).toBeGreaterThan(s.teams[1].budget);
+  });
+
+  it('a bid below the asking price but above cost is countered at the asking price', () => {
+    const s = atTrading();
+    const rival = s.teams[1];
+    const ask = rival.decisions.prices!.S1;
+    const floor = priceFloor(s, rival, 'S1');
+    const after = reduce(s, { type: 'PROPOSE_TRADE', playerId: 'me', sellerTeamId: rival.id, skuId: 'S1', qty: 10, unitPrice: floor });
+    const offer = after.tradeOffers.at(-1)!;
+    expect(offer.status).toBe('pending');
+    expect(offer.awaiting).toBe('buyer');
+    expect(offer.unitPrice).toBe(ask);
   });
 
   it('a rival declines a price below its cost floor', () => {
@@ -781,5 +793,25 @@ describe('production against the budget', () => {
   it('leaves a plan that fits the cash unchanged', () => {
     const plan = [{ lineId: 'L1', skuId: 'S1', qty: 100 }];
     expect(fitProductionToBudget(testConfig(), plan, 100_000)).toEqual(plan);
+  });
+});
+
+describe('rival offers to the player', () => {
+  it('a rival posts at most one offer a month, at its asking price, awaiting the player', () => {
+    let s = createGame(testConfig(), 'SOLO56');
+    s = reduce(s, { type: 'JOIN', playerId: 'me', name: 'Sam', asAdmin: true });
+    s = reduce(s, { type: 'SETUP_SOLO', playerId: 'me', teamName: 'Sam Co', roles: ['CEO'], rivals: 2 });
+    s = reduce(s, { type: 'START_GAME', playerId: 'me' });
+    for (let i = 0; i < 4; i++) s = reduce(s, { type: 'ADVANCE_PHASE', playerId: 'me' });
+    for (const rival of s.teams.filter((t) => t.bot)) {
+      const mine = s.tradeOffers.filter((o) => o.sellerTeamId === rival.id && o.month === s.month);
+      expect(mine.length).toBeLessThanOrEqual(1);
+      for (const offer of mine) {
+        expect(offer.awaiting).toBe('buyer');
+        expect(offer.unitPrice).toBe(rival.decisions.prices![offer.skuId]);
+      }
+    }
+    s = reduce(s, { type: 'ADVANCE_PHASE', playerId: 'me' }); // closes trading: pending offers expire
+    expect(s.tradeOffers.every((o) => o.status !== 'pending')).toBe(true);
   });
 });

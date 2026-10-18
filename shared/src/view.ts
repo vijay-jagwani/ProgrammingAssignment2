@@ -38,6 +38,20 @@ export interface ProfitBoardRow {
   budget: number;
 }
 
+/** One team's month, as the standing table shows it. */
+export interface MonthSummaryRow {
+  teamId: string;
+  teamName: string;
+  bot: boolean;
+  revenue: number;
+  productionTransport: number;
+  holdingAgeLoss: number;
+  tradeBuys: number;
+  tradeSells: number;
+  profit: number;
+  cumulativeProfit: number;
+}
+
 export interface GameView {
   rev: number;
   code: string;
@@ -67,6 +81,8 @@ export interface GameView {
   /** Units each team can deliver right now (shelf plus truckload plan), per SKU.
    *  Shared with every audience during trading and orders. */
   availability: Record<string, Record<string, number>> | null;
+  /** Every team's month at results time, for the standing table. */
+  monthSummary: MonthSummaryRow[] | null;
   /** Admin only: event log. */
   log: LogEntry[] | null;
 }
@@ -142,6 +158,25 @@ export function viewFor(state: GameState, audience: Audience): GameView {
     proposedOrders: isAdmin ? state.proposedOrders : null,
     submittedOrders: isAdmin ? state.submittedOrders : null,
     log: isAdmin ? state.log : null,
+    monthSummary: state.phase === 'RESULTS'
+      ? state.teams.flatMap((t) => {
+          const r = t.results.at(-1);
+          if (!r) return [];
+          const cents = (n: number) => Math.round(n * 100) / 100;
+          return [{
+            teamId: t.id,
+            teamName: t.name,
+            bot: t.bot === true,
+            revenue: r.revenue,
+            productionTransport: cents(r.productionCost + r.transportCost),
+            holdingAgeLoss: cents(r.holdingCost + r.ageLossCost),
+            tradeBuys: r.tradeBuys,
+            tradeSells: r.tradeSells,
+            profit: r.profit,
+            cumulativeProfit: t.cumulativeProfit,
+          }];
+        }).sort((a, b) => b.cumulativeProfit - a.cumulativeProfit)
+      : null,
     availability: state.phase === 'TRADING' || state.phase === 'ORDERS'
       ? Object.fromEntries(state.teams.map((t) => [
           t.id,

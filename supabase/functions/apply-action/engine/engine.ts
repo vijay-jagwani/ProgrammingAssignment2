@@ -435,6 +435,7 @@ function automateRoles(state: GameState): void {
       d.tradingDone = true;
     }
   }
+  if (state.phase === 'TRADING') postRivalOffers(state);
 }
 
 // --------------------------------------------------------- validation
@@ -679,20 +680,61 @@ function settleTrade(state: GameState, offer: TradeOffer): void {
   log(state, `Trade: ${buyer.name} bought ${offer.qty} x ${skuName} from ${seller.name} at ${offer.unitPrice}/unit.`);
 }
 
-/** Rival teams are automated: they sell at or above their cost floor, when they have the stock and the buyer can pay. */
+/** A rival team's asking price for a product: the price it set this month, else its cost floor plus a margin. */
+function rivalAsk(state: GameState, team: TeamState, skuId: string): number {
+  return round2(team.decisions.prices?.[skuId] ?? priceFloor(state, team, skuId) * 1.2);
+}
+
+/** A rival answers a bid it has to decide on: it sells at its asking price, counters at that price when the bid is
+ *  above its cost floor, and declines otherwise. */
 function answerRivalOffer(state: GameState, offer: TradeOffer): void {
   const seller = getTeam(state, offer.sellerTeamId);
   const buyer = getTeam(state, offer.buyerTeamId);
-  const fits =
-    offer.unitPrice >= priceFloor(state, seller, offer.skuId) &&
-    tradableUnits(seller, offer.skuId) >= offer.qty &&
-    buyer.budget - offer.qty * offer.unitPrice >= -state.config.overdraftLimit;
-  if (fits) {
+  const skuName = state.config.skus.find((sku) => sku.id === offer.skuId)?.name ?? offer.skuId;
+  const ask = rivalAsk(state, seller, offer.skuId);
+  const floor = priceFloor(state, seller, offer.skuId);
+  const inStock = tradableUnits(seller, offer.skuId) >= offer.qty;
+  const canPay = buyer.budget - offer.qty * ask >= -state.config.overdraftLimit;
+  if (inStock && offer.unitPrice >= ask && buyer.budget - offer.qty * offer.unitPrice >= -state.config.overdraftLimit) {
     settleTrade(state, offer);
-  } else {
-    offer.status = 'rejected';
-    const skuName = state.config.skus.find((sku) => sku.id === offer.skuId)?.name ?? offer.skuId;
-    log(state, `${seller.name} declined ${offer.qty} x ${skuName} from ${buyer.name} at ${offer.unitPrice}/unit.`);
+    return;
+  }
+  if (inStock && canPay && offer.unitPrice >= floor && offer.unitPrice < ask) {
+    offer.unitPrice = ask;
+    offer.awaiting = 'buyer';
+    offer.note = `${seller.name} counters at ${ask}`;
+    log(state, `${seller.name} counters ${offer.qty} x ${skuName} at ${ask}/unit.`);
+    return;
+  }
+  offer.status = 'rejected';
+  log(state, `${seller.name} declined ${offer.qty} x ${skuName} at ${offer.unitPrice}/unit.`);
+}
+
+/** Each rival with stock may offer some of it to the player once a month, at its asking price. Seeded, so replayable. */
+function postRivalOffers(state: GameState): void {
+  const buyer = state.teams.find((t) => !t.bot);
+  if (!buyer) return;
+  for (const rival of state.teams.filter((t) => t.bot)) {
+    const posted = state.tradeOffers.some((o) => o.month === state.month && o.sellerTeamId === rival.id);
+    if (posted || rand01(state.config.seed, 'rival-offer', state.month, rival.id) > 0.5) continue;
+    const stocked = state.config.skus.filter((sku) => tradableUnits(rival, sku.id) >= 10);
+    if (stocked.length === 0) continue;
+    const sku = stocked[Math.floor(rand01(state.config.seed, 'rival-sku', state.month, rival.id) * stocked.length)];
+    const available = tradableUnits(rival, sku.id);
+    const share = 0.3 + 0.4 * rand01(state.config.seed, 'rival-qty', state.month, rival.id);
+    state.tradeOffers.push({
+      id: `TR${state.tradeOffers.length + 1}-M${state.month}`,
+      month: state.month,
+      buyerTeamId: buyer.id,
+      sellerTeamId: rival.id,
+      skuId: sku.id,
+      qty: Math.min(available, Math.max(10, Math.round(available * share))),
+      unitPrice: rivalAsk(state, rival, sku.id),
+      status: 'pending',
+      awaiting: 'buyer',
+      note: `${rival.name} is offering this stock`,
+    });
+    log(state, `${rival.name} offers ${sku.name} to ${buyer.name}.`);
   }
 }
 
@@ -1026,6 +1068,7 @@ export function reduce(prev: GameState, action: Action): GameState {
       if (action.note !== undefined) offer.note = action.note.slice(0, 140);
       // the ball goes back to the other side
       offer.awaiting = (offer.awaiting ?? 'seller') === 'seller' ? 'buyer' : 'seller';
+      if (offer.awaiting === 'seller' && getTeam(state, offer.sellerTeamId).bot) answerRivalOffer(state, offer);
       break;
     }
 

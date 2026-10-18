@@ -5,6 +5,7 @@ import { ConfirmButton, NumInput, fmtMoney, fmtNum, pct } from '../components/ui
 import { PriceBoardCard } from './TeamDashboard';
 import { MarketMap } from '../components/SupplyMap';
 import { CommandRow } from '../components/CommandRow';
+import { MonthSummary } from '../components/MonthSummary';
 
 const ADVANCE_HINT: Record<string, string> = {
   FORECAST: 'Teams without a forecast get last actuals/baseline.',
@@ -24,6 +25,7 @@ export function AdminConsole() {
       <CommandRow control={<PhaseControl />} />
       <MarketMap />
       {view.phase === 'ORDERS' && <OrdersDesk key={`o${view.month}`} />}
+      {view.phase === 'RESULTS' && <MonthSummary />}
       {view.priceBoard && <PriceBoardCard />}
       <TeamsOverview />
       <div className="grid2">

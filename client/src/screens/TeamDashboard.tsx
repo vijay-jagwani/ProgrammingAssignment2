@@ -10,6 +10,7 @@ import { BarBreakdown, LineChart } from '../components/charts';
 import { PhaseControl } from './AdminConsole';
 import { SupplyMap } from '../components/SupplyMap';
 import { CommandRow } from '../components/CommandRow';
+import { MonthSummary } from '../components/MonthSummary';
 
 const unitsOf = (team: TeamState, skuId: string) =>
   (team.inventory[skuId] ?? []).reduce((s, b) => s + b.qty, 0);
@@ -95,7 +96,7 @@ function ActivePanel() {
       </div>
     );
   }
-  if (phase === 'RESULTS') return <MonthResultsPanel />;
+  if (phase === 'RESULTS') return <><MonthSummary /><MonthResultsPanel /></>;
 
   if (solo && owner) {
     return (
