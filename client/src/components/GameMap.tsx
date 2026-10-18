@@ -26,7 +26,7 @@ const WHAT: Partial<Record<Phase, string>> = {
 };
 
 /** The whole game at a glance: where we are in the month, and who the game is waiting on. */
-export function GameMap() {
+export function GameMap({ compact = false }: { compact?: boolean }) {
   const { view, me } = useGame();
   if (!view || !me || view.phase === 'LOBBY' || view.phase === 'GAME_OVER') return null;
 
@@ -60,7 +60,7 @@ export function GameMap() {
   }
 
   return (
-    <section className="gm" aria-label="Game overview">
+    <section className={`gm${compact ? ' gm-compact' : ''}`} aria-label="Game overview">
       <div className="gm-head">
         <div className="gm-month">
           <span className="kicker">Month</span>

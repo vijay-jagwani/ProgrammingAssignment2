@@ -8,6 +8,7 @@ import { ConfirmButton, NumInput, fmtMoney, fmtNum, pct } from '../components/ui
 import { BarBreakdown, LineChart } from '../components/charts';
 import { PhaseControl } from './AdminConsole';
 import { SupplyMap } from '../components/SupplyMap';
+import { CommandRow } from '../components/CommandRow';
 
 const unitsOf = (team: TeamState, skuId: string) =>
   (team.inventory[skuId] ?? []).reduce((s, b) => s + b.qty, 0);
@@ -23,9 +24,14 @@ export function TeamDashboard() {
   if (!view || !me || !view.myTeam) return null;
   const team = view.myTeam;
   const lastResult = team.results.at(-1);
+  const control = view.mode === 'solo'
+    ? <><PhaseControl /><SoloRoles /></>
+    : <WaitCard />;
 
   return (
     <div>
+      <CommandRow control={control} />
+      <SupplyMap />
       <div className="statrow">
         <div className="stat">
           <div className="k">Budget</div>
@@ -47,9 +53,6 @@ export function TeamDashboard() {
         </div>
       </div>
 
-      <SupplyMap />
-
-      {view.mode === 'solo' && <SoloCard />}
 
       <ActivePanel />
 
@@ -113,20 +116,19 @@ function ActivePanel() {
   );
 }
 
-function SoloCard() {
+function SoloRoles() {
   const { view, me } = useGame();
   if (!view || !me) return null;
   const played = ROLES.filter((r) => me.roles.includes(r));
   const automated = ROLES.filter((r) => !me.roles.includes(r));
   const rivals = view.teamsProgress.length - 1;
   return (
-    <div className="card">
+    <div className="solo-roles">
       <h3>Solo game · {rivals} automated rival team{rivals === 1 ? '' : 's'}</h3>
       <p className="sub">
         You play: <b>{played.map((r) => ROLE_LABELS[r]).join(', ') || 'nothing'}</b>. The game plays:{' '}
         <b>{automated.length ? automated.map((r) => ROLE_LABELS[r]).join(', ') : 'nothing — you play every role'}</b>.
       </p>
-      <PhaseControl />
     </div>
   );
 }
@@ -893,6 +895,19 @@ export function PriceBoardCard() {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+/** Team members in a multiplayer game: the facilitator moves the month on. */
+function WaitCard() {
+  return (
+    <div className="card wait-card">
+      <span className="kicker">Facilitator</span>
+      <h2>Your moves come first</h2>
+      <p className="sub">
+        Submit your decisions for this phase. The facilitator moves the month on once every team has submitted.
+      </p>
     </div>
   );
 }

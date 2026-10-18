@@ -4,6 +4,7 @@ import { useGame } from '../state';
 import { ConfirmButton, NumInput, fmtMoney, fmtNum, pct } from '../components/ui';
 import { PriceBoardCard } from './TeamDashboard';
 import { MarketMap } from '../components/SupplyMap';
+import { CommandRow } from '../components/CommandRow';
 
 const ADVANCE_HINT: Record<string, string> = {
   FORECAST: 'Teams without a forecast get last actuals/baseline.',
@@ -20,8 +21,8 @@ export function AdminConsole() {
   if (!view) return null;
   return (
     <div>
+      <CommandRow control={<PhaseControl />} />
       <MarketMap />
-      {view.phase !== 'ORDERS' && <PhaseControl />}
       {view.phase === 'ORDERS' && <OrdersDesk key={`o${view.month}`} />}
       {view.priceBoard && <PriceBoardCard />}
       <TeamsOverview />
@@ -162,9 +163,6 @@ function OrdersDesk() {
       <div className="row" style={{ marginTop: 12 }}>
         <ConfirmButton className="" disabled={busy} onConfirm={() => act({ type: 'SUBMIT_ORDERS', allocations: alloc })}>
           Set orders
-        </ConfirmButton>
-        <ConfirmButton disabled={busy} onConfirm={() => act({ type: 'ADVANCE_PHASE' })}>
-          Lock orders & resolve month
         </ConfirmButton>
         {view!.submittedOrders && <span className="badge good">✓ Orders set</span>}
         <span className="sub" style={{ fontSize: 12 }}>

@@ -476,3 +476,22 @@ details.market summary .sub { margin: 0; font-weight: 400; }
 
 /* keep the whole supply map in view on laptops and desktops */
 .smap-scroll > svg { width: min(100%, calc(44vh * 2.05)); margin: 0 auto; }
+
+/* top row of in-game screens: advance control beside the month status */
+.cmd-row { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(0, 1.6fr); gap: 16px; margin-bottom: 18px; align-items: stretch; }
+.cmd-left { display: flex; flex-direction: column; gap: 12px; }
+.cmd-left > .card { margin-bottom: 0; flex: 1; }
+.cmd-right > .gm { margin-bottom: 0; height: 100%; }
+.solo-roles { padding: 4px 4px 0; }
+.solo-roles h3 { margin: 0 0 4px; font-size: 15px; }
+.solo-roles .sub { margin: 0; font-size: 13px; color: var(--ink-2); }
+.wait-card h2 { font-size: 20px; margin: 4px 0 6px; }
+.gm-compact { padding: 16px 18px; }
+.gm-compact .gm-head { margin-bottom: 12px; gap: 16px; }
+.gm-compact .gm-month b { font-size: 30px; }
+.gm-compact .gm-now p { font-size: 14px; }
+.gm-compact .gm-scroll { overflow: visible; }
+.gm-compact .gm-track { min-width: 0; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); }
+.gm-compact .gm-dot { width: 38px; height: 38px; }
+.gm-compact .gm-name, .gm-compact .gm-owner { display: none; }
+@media (max-width: 860px) { .cmd-row { grid-template-columns: 1fr; } }
