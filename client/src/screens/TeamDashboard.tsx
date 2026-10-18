@@ -25,7 +25,6 @@ export function TeamDashboard() {
 
   return (
     <div>
-      <PhaseStepper />
       <div className="statrow">
         <div className="stat">
           <div className="k">Budget</div>
@@ -59,24 +58,6 @@ export function TeamDashboard() {
         <ProfitChartCard />
         {view.priceBoard && <PriceBoardCard />}
       </div>
-    </div>
-  );
-}
-
-export function PhaseStepper() {
-  const { view } = useGame();
-  if (!view) return null;
-  const idx = PHASE_ORDER.indexOf(view.phase as any);
-  return (
-    <div className="phase-stepper">
-      <span className="phase-step now" style={{ background: 'var(--ink-1)', color: 'var(--page)' }}>
-        Month {view.month}/{view.config.months}
-      </span>
-      {PHASE_ORDER.map((p, i) => (
-        <span key={p} className={`phase-step${i === idx ? ' now' : i < idx ? ' done' : ''}`}>
-          {PHASE_LABELS[p]}
-        </span>
-      ))}
     </div>
   );
 }

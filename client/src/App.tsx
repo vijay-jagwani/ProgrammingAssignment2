@@ -5,6 +5,7 @@ import { Lobby } from './screens/Lobby';
 import { AdminConsole } from './screens/AdminConsole';
 import { TeamDashboard } from './screens/TeamDashboard';
 import { FinalScreen } from './screens/Final';
+import { GameMap } from './components/GameMap';
 
 export default function App() {
   const { ready, fatal, view, me, error, clearError, leave, switchPlayer } = useGame();
@@ -57,6 +58,8 @@ export default function App() {
           {error} <span style={{ opacity: 0.6 }}>(click to dismiss)</span>
         </div>
       )}
+
+      <GameMap />
 
       {!view ? (
         <Landing />

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { PHASE_LABELS } from '@scg/shared';
 import { useGame } from '../state';
 import { ConfirmButton, NumInput, fmtMoney, fmtNum, pct } from '../components/ui';
-import { PhaseStepper, PriceBoardCard } from './TeamDashboard';
+import { PriceBoardCard } from './TeamDashboard';
 
 const ADVANCE_HINT: Record<string, string> = {
   FORECAST: 'Teams without a forecast get last actuals/baseline.',
@@ -19,7 +19,6 @@ export function AdminConsole() {
   if (!view) return null;
   return (
     <div>
-      <PhaseStepper />
       <PhaseControl />
       {view.phase === 'ORDERS' && <OrdersDesk key={`o${view.month}`} />}
       {view.priceBoard && <PriceBoardCard />}

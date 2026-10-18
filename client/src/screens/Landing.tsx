@@ -21,13 +21,14 @@ export function Landing() {
 
   return (
     <div>
-      <div className="card" style={{ textAlign: 'center' }}>
-        <h2 style={{ fontSize: 22 }}>Supply Chain Game</h2>
+      <section className="hero">
+        <span className="kicker">Supply chain simulation · no sign-up</span>
+        <h2>Run a supply chain for a season. Learn from the mistakes that cost money.</h2>
         <p className="sub">
-          Teams of 5 — Demand Planner, Production Planner, Transport Manager, Customer Ops, CEO —
-          run a finished-goods supply chain for a season. Forecast, produce, ship, price, trade… profit.
+          Forecast, produce, ship, price and trade against other teams. Practise alone for free,
+          or run a whole class with a join code.
         </p>
-      </div>
+      </section>
       <div className="grid2">
         <div className="card">
           <h2>Join a game</h2>
