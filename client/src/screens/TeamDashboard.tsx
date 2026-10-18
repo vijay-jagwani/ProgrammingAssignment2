@@ -7,6 +7,7 @@ import { useGame } from '../state';
 import { ConfirmButton, NumInput, fmtMoney, fmtNum, pct } from '../components/ui';
 import { BarBreakdown, LineChart } from '../components/charts';
 import { PhaseControl } from './AdminConsole';
+import { SupplyMap } from '../components/SupplyMap';
 
 const unitsOf = (team: TeamState, skuId: string) =>
   (team.inventory[skuId] ?? []).reduce((s, b) => s + b.qty, 0);
@@ -45,6 +46,8 @@ export function TeamDashboard() {
           <div className="v">{lastResult ? pct(lastResult.fillRate) : '—'}</div>
         </div>
       </div>
+
+      <SupplyMap />
 
       {view.mode === 'solo' && <SoloCard />}
 

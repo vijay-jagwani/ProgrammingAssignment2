@@ -387,3 +387,35 @@ details.market summary .sub { margin: 0; font-weight: 400; }
 @media (max-width: 640px) {
   table.data { display: block; overflow-x: auto; white-space: nowrap; }
 }
+
+/* ------------------------------------------------------ supply network map */
+.smap {
+  background: var(--surface-1); border-radius: 20px; padding: 18px 20px 16px; margin-bottom: 22px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.05);
+}
+.smap-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.smap-head h3 { margin: 2px 0 0; font-size: 20px; }
+.smap-stats { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip {
+  font-size: 13px; padding: 6px 12px; border-radius: 999px; background: var(--page); color: var(--ink-2);
+}
+.chip b { color: var(--ink-1); font-variant-numeric: tabular-nums; margin-left: 4px; }
+.chip.good b { color: var(--delta-good); }
+.chip.bad b { color: var(--delta-bad); }
+.smap-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.smap svg { display: block; width: 100%; height: auto; min-width: 640px; }
+.smap-ground { fill: var(--wash); }
+.smap-road { fill: none; stroke: var(--grid); stroke-width: 26; stroke-linecap: round; }
+.smap-road-line { fill: none; stroke: var(--surface-1); stroke-width: 2; stroke-dasharray: 8 10; stroke-linecap: round; opacity: 0.9; }
+.smap-node { fill: var(--surface-1); stroke: var(--axis); stroke-width: 2; }
+.smap-node.live { fill: var(--accent); stroke: var(--accent); }
+.smap-node-text { font-size: 13px; font-weight: 700; fill: var(--ink-1); }
+.smap-node.live + .smap-node-text { fill: var(--accent-ink); }
+.smap-label { font-size: 14px; font-weight: 650; fill: var(--ink-1); }
+.smap-sub { font-size: 12px; fill: var(--ink-3); }
+.smap-title { font-size: 14px; font-weight: 700; fill: var(--ink-1); }
+.smap-big { font-size: 30px; font-weight: 700; fill: var(--ink-1); font-variant-numeric: tabular-nums; }
+.smap-warehouse { fill: var(--surface-1); stroke: var(--accent); stroke-width: 2.5; }
+.smap-market { fill: var(--surface-1); stroke: var(--delta-good); stroke-width: 2.5; }
+.smap-truck rect { fill: var(--accent); stroke: var(--surface-1); stroke-width: 2; }
+@media (prefers-reduced-motion: reduce) { .smap-truck animateMotion { display: none; } }
