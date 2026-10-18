@@ -1,5 +1,6 @@
 import type {
   GameConfig,
+  GameMode,
   GameState,
   LogEntry,
   Phase,
@@ -39,6 +40,7 @@ export interface ProfitBoardRow {
 export interface GameView {
   rev: number;
   code: string;
+  mode: GameMode;
   phase: Phase;
   month: number;
   config: GameConfig;
@@ -121,6 +123,7 @@ export function viewFor(state: GameState, audience: Audience): GameView {
   return {
     rev: state.rev,
     code: state.code,
+    mode: state.mode === 'solo' ? 'solo' : 'multiplayer',
     phase: state.phase,
     month: state.month,
     config: state.config,
@@ -147,6 +150,8 @@ export function allAudiences(state: GameState): Audience[] {
 export function audienceFor(state: GameState, playerId: string): Audience {
   const p = state.players.find((pl) => pl.id === playerId);
   if (!p) return 'public';
+  // a solo host is also the admin, but plays their own team's seat
+  if (p.teamId && state.mode === 'solo') return `team:${p.teamId}`;
   if (p.isAdmin) return 'admin';
   if (p.teamId) return `team:${p.teamId}`;
   return 'public';

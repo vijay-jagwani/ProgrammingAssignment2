@@ -7,6 +7,7 @@ export function Lobby() {
   const { view, me, act, busy, warn } = useGame();
   const [teamName, setTeamName] = useState('');
   if (!view || !me) return null;
+  if (view.mode === 'solo') return <SoloLobby />;
 
   const admins = view.players.filter((p) => p.isAdmin);
   const teamless = view.players.filter((p) => !p.isAdmin && !p.teamId);
@@ -128,7 +129,81 @@ export function Lobby() {
         </div>
       )}
 
+      <MarketSetupCard />
+    </div>
+  );
+}
+
+function SoloLobby() {
+  const { view, me, act, busy } = useGame();
+  if (!view || !me) return null;
+  const myTeam = view.teamsProgress.find((t) => t.id === me.teamId);
+  const rivals = view.teamsProgress.filter((t) => t.id !== me.teamId);
+  const automated = ROLES.filter((r) => !me.roles.includes(r));
+
+  return (
+    <div>
       <div className="card">
+        <h2>Solo game — set up your roles</h2>
+        <p className="sub">
+          Only you can play this game. Code <b>{view.code}</b> · {view.config.months} months ·{' '}
+          {view.config.skus.length} SKUs · {view.config.difficulty} difficulty.
+        </p>
+      </div>
+
+      <div className="grid2">
+        <div className="card">
+          <h3>{myTeam?.name ?? 'Your team'} <span className="badge on">you</span></h3>
+          <p className="sub">Click the roles you want to play. Roles you leave out are played by the game.</p>
+          <div className="row">
+            {ROLES.map((r) => {
+              const mine = me.roles.includes(r);
+              return (
+                <span key={r} className={`rolechip${mine ? ' mine' : ''}`}
+                  title={mine ? 'Click to hand this role to the game' : 'Click to play this role'}
+                  onClick={() => {
+                    if (busy) return;
+                    act(mine ? { type: 'RELEASE_ROLE', role: r } : { type: 'CLAIM_ROLE', role: r });
+                  }}>
+                  {ROLE_LABELS[r]}{mine ? '' : ' · automated'}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+        <div className="card">
+          <h3>Rival teams <span className="badge">{rivals.length} automated</span></h3>
+          <p className="sub">Each rival is run by the game in every role and sells into the same market.</p>
+          <div className="row">
+            {rivals.map((t) => <span key={t.id} className="badge">🤖 {t.name}</span>)}
+          </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <h3>Start</h3>
+        <p className="sub">
+          {automated.length
+            ? `The game plays ${automated.map((r) => ROLE_LABELS[r]).join(', ')} for your team.`
+            : 'You play every role for your team.'}
+        </p>
+        <button className="primary" disabled={busy || me.roles.length === 0}
+          onClick={() => act({ type: 'START_GAME' })}>
+          Start solo game
+        </button>
+        {me.roles.length === 0 && <p className="sub" style={{ marginTop: 8 }}>Pick at least one role to play.</p>}
+      </div>
+
+      <MarketSetupCard />
+    </div>
+  );
+}
+
+function MarketSetupCard() {
+  const { view } = useGame();
+  if (!view) return null;
+  return (
+    <div className="card">
         <h3>Market setup</h3>
         <p className="sub" style={{ marginBottom: 8 }}>
           Total market demand = baseline × number of teams — with{' '}
@@ -164,6 +239,5 @@ export function Lobby() {
           Interplant ${view.config.transport.interplant.costPerUnit}/u, arrives next month.
         </p>
       </div>
-    </div>
   );
 }

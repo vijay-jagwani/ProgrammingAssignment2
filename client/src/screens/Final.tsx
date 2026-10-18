@@ -97,7 +97,7 @@ function TeamDebrief({ teamId }: { teamId: string }) {
   if (missAmt > 0) learnings.push(`Biggest forecast miss: ${missSku}, off by ${fmtNum(missAmt)} units.`);
   if (totals.tradeBuys + totals.tradeSells > 0) {
     learnings.push(`Traded ${fmtMoney(totals.tradeBuys + totals.tradeSells)} with other teams — make-vs-buy in action.`);
-  } else {
+  } else if (view?.mode !== 'solo') {
     learnings.push('Never traded — was self-sufficiency worth the capacity strain?');
   }
   if (totals.interest > 0) learnings.push(`Paid ${fmtMoney(totals.interest)} in overdraft interest.`);

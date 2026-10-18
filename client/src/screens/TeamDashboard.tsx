@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
 import {
   GameView, PHASE_LABELS, PHASE_ORDER, PHASE_ROLE, ProductionAllocation, Role,
-  ROLE_LABELS, TeamState, TransportSplit, priceFloor, referenceCost,
+  ROLE_LABELS, ROLES, TeamState, TransportSplit, priceFloor, referenceCost,
 } from '@scg/shared';
 import { useGame } from '../state';
 import { ConfirmButton, NumInput, fmtMoney, fmtNum, pct } from '../components/ui';
 import { BarBreakdown, LineChart } from '../components/charts';
+import { PhaseControl } from './AdminConsole';
 
 const unitsOf = (team: TeamState, skuId: string) =>
   (team.inventory[skuId] ?? []).reduce((s, b) => s + b.qty, 0);
@@ -45,6 +46,8 @@ export function TeamDashboard() {
           <div className="v">{lastResult ? pct(lastResult.fillRate) : '—'}</div>
         </div>
       </div>
+
+      {view.mode === 'solo' && <SoloCard />}
 
       <ActivePanel />
 
@@ -88,7 +91,8 @@ function ActivePanel() {
   const claimedOnTeam = owner
     ? view.players.some((p) => p.teamId === me.teamId && p.roles.includes(owner))
     : false;
-  const iOwn = owner ? me.roles.includes(owner) || !claimedOnTeam : false;
+  const solo = view.mode === 'solo';
+  const iOwn = owner ? me.roles.includes(owner) || (!solo && !claimedOnTeam) : false;
 
   if (phase === 'FORECAST' && iOwn) return <ForecastPanel key={`f${view.month}`} />;
   if (phase === 'PRODUCTION' && iOwn) return <ProductionPanel key={`p${view.month}`} />;
@@ -105,6 +109,14 @@ function ActivePanel() {
   }
   if (phase === 'RESULTS') return <MonthResultsPanel />;
 
+  if (solo && owner) {
+    return (
+      <div className="card banner info" style={{ margin: '0 0 14px' }}>
+        <b>{PHASE_LABELS[phase]}</b> — the game plays {ROLE_LABELS[owner]} for your team this month.
+      </div>
+    );
+  }
+
   const ownerName = owner
     ? view.players.find((p) => p.teamId === me.teamId && p.roles.includes(owner))?.name
     : null;
@@ -113,6 +125,24 @@ function ActivePanel() {
       <b>{PHASE_LABELS[phase]}</b> — waiting on{' '}
       {owner ? `${ROLE_LABELS[owner]}${ownerName ? ` (${ownerName})` : ''}` : 'the facilitator'}.
       Talk it through as a team: every decision here is shared fate.
+    </div>
+  );
+}
+
+function SoloCard() {
+  const { view, me } = useGame();
+  if (!view || !me) return null;
+  const played = ROLES.filter((r) => me.roles.includes(r));
+  const automated = ROLES.filter((r) => !me.roles.includes(r));
+  const rivals = view.teamsProgress.length - 1;
+  return (
+    <div className="card">
+      <h3>Solo game · {rivals} automated rival team{rivals === 1 ? '' : 's'}</h3>
+      <p className="sub">
+        You play: <b>{played.map((r) => ROLE_LABELS[r]).join(', ') || 'nothing'}</b>. The game plays:{' '}
+        <b>{automated.length ? automated.map((r) => ROLE_LABELS[r]).join(', ') : 'nothing — you play every role'}</b>.
+      </p>
+      <PhaseControl />
     </div>
   );
 }

@@ -22,6 +22,15 @@ run by each team's CEO.
 
 A player may hold several roles, so short-handed teams still work.
 
+## Two ways to play
+
+- **Multiplayer** — the classic game: teams of up to five people, with a
+  facilitator running the market.
+- **Solo practice** — one person picks the roles they want to play, the game
+  plays the rest, and 1–5 automated rival teams compete for the same market.
+  There is no facilitator step: each month resolves once you lock your
+  decisions. Rival trading is not available in solo mode yet.
+
 ## A month in the game
 
 1. **Forecast** → 2. **Production** → 3. **Transport** → 4. **Pricing** →
@@ -64,6 +73,7 @@ State survives restarts (`data/local-games.json`).
 npm test           # engine unit tests (deterministic economics)
 npm run typecheck
 npm run e2e        # Playwright: full 3-month game with 1 admin + 2 teams
+npm run e2e:solo   # Playwright: solo practice game with automated rivals
 ```
 
 ## Deploy (Supabase + Netlify)

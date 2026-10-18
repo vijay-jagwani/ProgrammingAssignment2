@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ROLES, ROLE_LABELS, Role } from '@scg/shared';
 import { useGame } from '../state';
 import { HowItWorks } from '../components/HowItWorks';
 
@@ -11,6 +12,12 @@ export function Landing() {
   const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
   const [numCustomers, setNumCustomers] = useState(3);
   const [budget, setBudget] = useState(100000);
+  const [solo, setSolo] = useState(false);
+  const [teamName, setTeamName] = useState('');
+  const [roles, setRoles] = useState<Role[]>([...ROLES]);
+  const [rivals, setRivals] = useState(2);
+  const toggleRole = (r: Role) =>
+    setRoles(roles.includes(r) ? roles.filter((x) => x !== r) : [...roles, r]);
 
   return (
     <div>
@@ -51,8 +58,14 @@ export function Landing() {
         </div>
         <div className="card">
           <h2>Host a new game</h2>
+          <div className="row" style={{ marginBottom: 10 }}>
+            <button className={`small${solo ? '' : ' primary'}`} onClick={() => setSolo(false)}>Multiplayer</button>
+            <button className={`small${solo ? ' primary' : ''}`} onClick={() => setSolo(true)}>Solo practice</button>
+          </div>
           <p className="sub">
-            You become the facilitator (admin) — admins run the market, not a team.{' '}
+            {solo
+              ? 'Play one team yourself: pick the roles you want, and the game plays the rest and runs rival teams.'
+              : 'You become the facilitator (admin) — admins run the market, not a team.'}{' '}
             <a href="/facilitator-guide.html" target="_blank" rel="noopener noreferrer">
               Read the facilitator guide →
             </a>
@@ -62,6 +75,31 @@ export function Landing() {
               Your name
               <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Vijay" maxLength={24} />
             </label>
+            {solo && (
+              <>
+                <label className="field">
+                  Team name
+                  <input value={teamName} onChange={(e) => setTeamName(e.target.value)}
+                    placeholder="e.g. Sam Co" maxLength={24} />
+                </label>
+                <label className="field">
+                  Roles you play (the game plays the rest)
+                  <div className="row">
+                    {ROLES.map((r) => (
+                      <span key={r} className={`rolechip${roles.includes(r) ? ' mine' : ''}`}
+                        onClick={() => toggleRole(r)}>
+                        {ROLE_LABELS[r]}
+                      </span>
+                    ))}
+                  </div>
+                </label>
+                <label className="field">
+                  Rival teams, automated (1–5)
+                  <input className="num" type="number" min={1} max={5} value={rivals}
+                    onChange={(e) => setRivals(Number(e.target.value))} />
+                </label>
+              </>
+            )}
             <div className="row">
               <label className="field">
                 Months
@@ -96,12 +134,16 @@ export function Landing() {
             </div>
             <button
               className="primary"
-              disabled={busy || !name.trim()}
+              disabled={busy || !name.trim() || (solo && roles.length === 0)}
               onClick={() =>
-                create(name, { months, numSkus, difficulty, numCustomers, startingBudget: budget })
+                create(
+                  name,
+                  { months, numSkus, difficulty, numCustomers, startingBudget: budget },
+                  solo ? { teamName, roles, rivals } : undefined,
+                )
               }
             >
-              Create game
+              {solo ? 'Start solo game' : 'Create game'}
             </button>
           </div>
         </div>

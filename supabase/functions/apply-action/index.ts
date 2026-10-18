@@ -98,6 +98,15 @@ Deno.serve(async (req) => {
         name: String(body.name ?? 'Admin'),
         asAdmin: true,
       });
+      if (body.solo) {
+        state = reduce(state, {
+          type: 'SETUP_SOLO',
+          playerId,
+          teamName: String(body.solo.teamName ?? ''),
+          roles: Array.isArray(body.solo.roles) ? body.solo.roles : [],
+          rivals: Number(body.solo.rivals),
+        });
+      }
       const { data: game, error } = await admin
         .from('games')
         .insert({ code, state, rev: state.rev })

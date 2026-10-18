@@ -33,7 +33,7 @@ export default function App() {
         <span className="spacer" />
         {me && (
           <span className="badge">
-            {me.name}{me.isAdmin ? ' · admin' : ''}
+            {me.name}{me.isAdmin && view?.mode !== 'solo' ? ' · admin' : ''}
           </span>
         )}
         {view && (
@@ -64,7 +64,7 @@ export default function App() {
         <Lobby />
       ) : view.phase === 'GAME_OVER' ? (
         <FinalScreen />
-      ) : me?.isAdmin ? (
+      ) : me?.isAdmin && view.mode !== 'solo' ? (
         <AdminConsole />
       ) : me?.teamId ? (
         <TeamDashboard />

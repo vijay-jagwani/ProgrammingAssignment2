@@ -165,9 +165,15 @@ export interface MonthResult {
   endInventoryUnits: number;
 }
 
+/** multiplayer: teams of up to 5 people. solo: one person picks roles, the
+ *  engine plays every other role and runs rival teams automatically. */
+export type GameMode = 'multiplayer' | 'solo';
+
 export interface TeamState {
   id: string;
   name: string;
+  /** Automated rival team in a solo game: no players, every role is played by the engine. */
+  bot?: boolean;
   budget: number;
   cumulativeProfit: number;
   inventory: Record<string, Batch[]>; // skuId -> batches (FIFO, oldest first)
@@ -209,6 +215,8 @@ export interface LogEntry {
 export interface GameState {
   rev: number;
   code: string;
+  /** Missing on games created before solo mode existed: treated as multiplayer. */
+  mode: GameMode;
   config: GameConfig;
   phase: Phase;
   month: number; // 1-based; 0 while in LOBBY
@@ -230,6 +238,7 @@ export type Action =
   | { type: 'JOIN'; playerId: string; name: string; asAdmin: boolean }
   | { type: 'SET_ADMIN'; playerId: string; targetPlayerId: string; isAdmin: boolean }
   | { type: 'KICK_PLAYER'; playerId: string; targetPlayerId: string }
+  | { type: 'SETUP_SOLO'; playerId: string; teamName: string; roles: Role[]; rivals: number }
   | { type: 'CREATE_TEAM'; playerId: string; name: string }
   | { type: 'JOIN_TEAM'; playerId: string; teamId: string }
   | { type: 'CLAIM_ROLE'; playerId: string; role: Role }

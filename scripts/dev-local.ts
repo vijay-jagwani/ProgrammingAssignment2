@@ -130,6 +130,15 @@ const server = http.createServer(async (req, res) => {
         state = reduce(state, {
           type: 'JOIN', playerId, name: String(body.name ?? 'Admin'), asAdmin: true,
         });
+        if (body.solo) {
+          state = reduce(state, {
+            type: 'SETUP_SOLO',
+            playerId,
+            teamName: String(body.solo.teamName ?? ''),
+            roles: Array.isArray(body.solo.roles) ? body.solo.roles : [],
+            rivals: Number(body.solo.rivals),
+          });
+        }
         games.set(code, state);
         persist();
         return json(res, { code, gameId: code, view: viewFor(state, 'admin') });

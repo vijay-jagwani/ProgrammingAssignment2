@@ -2,7 +2,7 @@
 // (scripts/dev-local.ts) or the real Supabase project. Which one is used
 // is decided by env: VITE_SUPABASE_URL set -> Supabase, else local.
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import type { Action, GameConfig, GameView } from '@scg/shared';
+import type { Action, GameView, Role } from '@scg/shared';
 
 export interface CreateSetup {
   months?: number;
@@ -10,6 +10,13 @@ export interface CreateSetup {
   difficulty?: 'easy' | 'medium' | 'hard';
   numCustomers?: number;
   startingBudget?: number;
+}
+
+/** Solo games: the host plays these roles; the rest are automated. */
+export interface SoloSetup {
+  teamName: string;
+  roles: Role[];
+  rivals: number;
 }
 
 export interface SessionInfo {
@@ -27,7 +34,7 @@ export interface Backend {
   playerId(): string;
   /** Mint a fresh identity — for a second person on the same browser profile. */
   resetIdentity(): Promise<void>;
-  create(name: string, setup: CreateSetup, config?: GameConfig): Promise<SessionInfo>;
+  create(name: string, setup: CreateSetup, solo?: SoloSetup): Promise<SessionInfo>;
   join(code: string, name: string): Promise<SessionInfo>;
   action(code: string, action: ClientAction): Promise<GameView>;
   fetchView(code: string, gameId: string): Promise<GameView | null>;
@@ -71,8 +78,8 @@ class LocalBackend implements Backend {
     return data;
   }
 
-  async create(name: string, setup: CreateSetup, config?: GameConfig): Promise<SessionInfo> {
-    return this.rpc({ op: 'create', name, setup, config });
+  async create(name: string, setup: CreateSetup, solo?: SoloSetup): Promise<SessionInfo> {
+    return this.rpc({ op: 'create', name, setup, solo });
   }
   async join(code: string, name: string): Promise<SessionInfo> {
     return this.rpc({ op: 'join', code, name });
@@ -159,8 +166,8 @@ class SupabaseBackend implements Backend {
     return data;
   }
 
-  async create(name: string, setup: CreateSetup, config?: GameConfig): Promise<SessionInfo> {
-    return this.rpc({ op: 'create', name, setup, config });
+  async create(name: string, setup: CreateSetup, solo?: SoloSetup): Promise<SessionInfo> {
+    return this.rpc({ op: 'create', name, setup, solo });
   }
   async join(code: string, name: string): Promise<SessionInfo> {
     return this.rpc({ op: 'join', code, name });

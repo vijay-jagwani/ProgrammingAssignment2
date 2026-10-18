@@ -2,7 +2,7 @@ import {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
 } from 'react';
 import type { GameView, PlayerInfo } from '@scg/shared';
-import { Backend, ClientAction, CreateSetup, makeBackend } from './backend';
+import { Backend, ClientAction, CreateSetup, SoloSetup, makeBackend } from './backend';
 
 interface Session {
   code: string;
@@ -20,7 +20,7 @@ interface GameCtx {
   clearError(): void;
   /** Show a message in the error banner without hitting the backend. */
   warn(message: string): void;
-  create(name: string, setup: CreateSetup): Promise<void>;
+  create(name: string, setup: CreateSetup, solo?: SoloSetup): Promise<void>;
   join(code: string, name: string): Promise<void>;
   act(action: ClientAction): Promise<boolean>;
   leave(): void;
@@ -80,11 +80,11 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     setView(v);
   };
 
-  const create = useCallback(async (name: string, setup: CreateSetup) => {
+  const create = useCallback(async (name: string, setup: CreateSetup, solo?: SoloSetup) => {
     setBusy(true);
     setError(null);
     try {
-      const info = await backend.current!.create(name, setup);
+      const info = await backend.current!.create(name, setup, solo);
       persist({ code: info.code, gameId: info.gameId }, info.view);
     } catch (e: any) {
       setError(e.message);

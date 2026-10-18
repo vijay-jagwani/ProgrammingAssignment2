@@ -32,10 +32,11 @@ export function AdminConsole() {
   );
 }
 
-function PhaseControl() {
+export function PhaseControl() {
   const { view, act, busy } = useGame();
   if (!view) return null;
   const phaseKey = view.phase as keyof typeof ADVANCE_HINT;
+  const solo = view.mode === 'solo';
   const submittedFlag = {
     FORECAST: 'forecast', PRODUCTION: 'production', TRANSPORT: 'transport', PRICING: 'prices',
     TRADING: 'trading',
@@ -44,8 +45,12 @@ function PhaseControl() {
   return (
     <div className="card">
       <h2>{PHASE_LABELS[view.phase]} — month {view.month}</h2>
-      <p className="sub">{ADVANCE_HINT[phaseKey] ?? ''}</p>
-      {submittedFlag && (
+      <p className="sub">
+        {solo && view.phase === 'PRICING'
+          ? 'Advancing locks your prices and resolves the month against the rival teams.'
+          : ADVANCE_HINT[phaseKey] ?? ''}
+      </p>
+      {submittedFlag && !solo && (
         <div className="row" style={{ marginBottom: 10 }}>
           {view.teamsProgress.map((t) => (
             <span key={t.id} className={`badge${t.submitted[submittedFlag] ? ' good' : ''}`}>
@@ -56,6 +61,7 @@ function PhaseControl() {
       )}
       <ConfirmButton disabled={busy} onConfirm={() => act({ type: 'ADVANCE_PHASE' })}>
         {view.phase === 'ORDERS' ? 'Lock orders & resolve month'
+          : solo && view.phase === 'PRICING' ? 'Lock prices & resolve month'
           : view.phase === 'RESULTS'
             ? view.month >= view.config.months ? 'Finish game' : `Start month ${view.month + 1}`
             : 'Advance phase'}

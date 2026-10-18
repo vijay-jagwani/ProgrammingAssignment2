@@ -10,6 +10,7 @@ import {
   Phase,
   PlayerInfo,
   ProductionAllocation,
+  ROLES,
   Role,
   SkuMonthOutcome,
   TeamState,
@@ -51,6 +52,7 @@ function requireRole(state: GameState, playerId: string, role: Role): { player: 
   const p = getPlayer(state, playerId);
   if (!p.teamId) throw new EngineError('You are not on a team');
   if (!p.roles.includes(role)) {
+    if (state.mode === 'solo') throw new EngineError('This role is played by the game in solo mode');
     // Vacant-role fallback: if NOBODY on the team claimed this role, any
     // teammate may act for it — a short-handed team is never stuck.
     const claimedByTeammate = state.players.some(
@@ -275,6 +277,7 @@ export function createGame(config: GameConfig, code: string): GameState {
   return {
     rev: 0,
     code,
+    mode: 'multiplayer',
     config,
     phase: 'LOBBY',
     month: 0,
@@ -336,6 +339,97 @@ function fillDefaults(state: GameState, leaving: Phase): void {
         state.config.skus.map((s) => [s.id, priceFloor(state, team, s.id)]),
       );
       log(state, `${team.name}: no prices submitted — defaulted to cost floor.`);
+    }
+  }
+}
+
+// ------------------------------------------------------ solo automation
+
+function pipelineUnits(team: TeamState, skuId: string): number {
+  return team.pipeline.filter((s) => s.skuId === skuId).reduce((sum, s) => sum + s.qty, 0);
+}
+
+/** Average of the last three months' realized orders, falling back to baseline. */
+function autoForecast(state: GameState, team: TeamState): Record<string, number> {
+  return Object.fromEntries(
+    state.config.skus.map((sku) => {
+      const recent = team.results
+        .slice(-3)
+        .map((r) => r.bySku[sku.id]?.ordered)
+        .filter((v): v is number => v !== undefined);
+      const avg = recent.length
+        ? recent.reduce((s, v) => s + v, 0) / recent.length
+        : sku.historicalMonthlyDemand;
+      return [sku.id, Math.round(avg)];
+    }),
+  );
+}
+
+/** Build toward the forecast on the cheapest lines with room, within cash on hand. */
+function autoProduction(state: GameState, team: TeamState): ProductionAllocation[] {
+  const { config } = state;
+  const minTransport = Math.min(
+    config.transport.truckload.costPerUnit,
+    config.transport.interplant.costPerUnit,
+  );
+  const capLeft: Record<string, number> = Object.fromEntries(
+    config.lines.map((l) => [l.id, l.capacityPerMonth]),
+  );
+  const allocations: ProductionAllocation[] = [];
+  let committed = 0;
+  for (const sku of config.skus) {
+    let need = Math.max(
+      0,
+      (team.decisions.forecast?.[sku.id] ?? 0) - inventoryUnits(team, sku.id) - pipelineUnits(team, sku.id),
+    );
+    const lines = config.lines
+      .filter((l) => sku.allowedLineIds.includes(l.id))
+      .sort((a, b) => a.costPerUnit - b.costPerUnit);
+    for (const line of lines) {
+      const unitCost = line.costPerUnit + minTransport;
+      const qty = Math.min(need, capLeft[line.id], Math.floor((team.budget - committed) / unitCost));
+      if (qty <= 0) continue;
+      allocations.push({ lineId: line.id, skuId: sku.id, qty });
+      capLeft[line.id] -= qty;
+      committed += qty * unitCost;
+      need -= qty;
+    }
+  }
+  return allocations;
+}
+
+function autoTransport(state: GameState, team: TeamState): Record<string, TransportSplit> {
+  const made = producedBySku(team);
+  return Object.fromEntries(
+    state.config.skus.map((s) => [s.id, { truckload: made[s.id] ?? 0, interplant: 0 }]),
+  );
+}
+
+/** Priced 20% above the cost floor: a margin without pricing itself out. */
+function autoPrices(state: GameState, team: TeamState): Record<string, number> {
+  return Object.fromEntries(
+    state.config.skus.map((s) => [s.id, round2(priceFloor(state, team, s.id) * 1.2)]),
+  );
+}
+
+/** Solo games: a role nobody on the team claimed gets its decision for the current phase. */
+function automateRoles(state: GameState): void {
+  for (const team of state.teams) {
+    const claimed = new Set(
+      state.players.filter((p) => p.teamId === team.id).flatMap((p) => p.roles),
+    );
+    const d = team.decisions;
+    if (state.phase === 'FORECAST' && !claimed.has('DEMAND_PLANNER') && d.forecast === null) {
+      d.forecast = autoForecast(state, team);
+    }
+    if (state.phase === 'PRODUCTION' && !claimed.has('PRODUCTION_PLANNER') && d.production === null) {
+      d.production = autoProduction(state, team);
+    }
+    if (state.phase === 'TRANSPORT' && !claimed.has('TRANSPORT_MANAGER') && d.transport === null) {
+      d.transport = autoTransport(state, team);
+    }
+    if (state.phase === 'PRICING' && !claimed.has('CUSTOMER_OPS') && d.prices === null) {
+      d.prices = autoPrices(state, team);
     }
   }
 }
@@ -560,6 +654,9 @@ export function reduce(prev: GameState, action: Action): GameState {
   switch (action.type) {
     case 'JOIN': {
       if (state.players.some((p) => p.id === action.playerId)) return state; // idempotent rejoin
+      if (state.mode === 'solo' && !action.asAdmin) {
+        throw new EngineError('This is a solo game — start your own game to play');
+      }
       const name = action.name.trim().slice(0, 24);
       if (!name) throw new EngineError('Please enter a name');
       const isFirst = state.players.length === 0;
@@ -597,6 +694,30 @@ export function reduce(prev: GameState, action: Action): GameState {
       break;
     }
 
+    case 'SETUP_SOLO': {
+      requireAdmin(state, action.playerId);
+      requirePhase(state, 'LOBBY');
+      if (state.teams.length > 0) throw new EngineError('Solo setup must happen before any team exists');
+      const roles = ROLES.filter((r) => action.roles.includes(r));
+      if (roles.length === 0) throw new EngineError('Pick at least one role you want to play');
+      const rivals = action.rivals;
+      if (!Number.isInteger(rivals) || rivals < 1 || rivals > 5) {
+        throw new EngineError('Choose between 1 and 5 rival teams');
+      }
+      const me = getPlayer(state, action.playerId);
+      const name = action.teamName.trim().slice(0, 24) || 'Your team';
+      state.mode = 'solo';
+      state.teams.push(makeTeam(`T${state.teams.length + 1}`, name, state.config));
+      me.teamId = state.teams[0].id;
+      me.roles = roles;
+      for (let i = 1; i <= rivals; i++) {
+        const bot = makeTeam(`T${state.teams.length + 1}`, `Rival ${i}`, state.config);
+        state.teams.push({ ...bot, bot: true });
+      }
+      log(state, `Solo game: ${name} vs ${rivals} automated rival team(s).`);
+      break;
+    }
+
     case 'CREATE_TEAM': {
       requirePhase(state, 'LOBBY');
       const p = getPlayer(state, action.playerId);
@@ -630,6 +751,9 @@ export function reduce(prev: GameState, action: Action): GameState {
     }
 
     case 'CLAIM_ROLE': {
+      if (state.mode === 'solo' && state.phase !== 'LOBBY') {
+        throw new EngineError('Roles are fixed once a solo game starts');
+      }
       const p = getPlayer(state, action.playerId);
       if (!p.teamId) throw new EngineError('Join a team first');
       const taken = state.players.some(
@@ -641,6 +765,9 @@ export function reduce(prev: GameState, action: Action): GameState {
     }
 
     case 'RELEASE_ROLE': {
+      if (state.mode === 'solo' && state.phase !== 'LOBBY') {
+        throw new EngineError('Roles are fixed once a solo game starts');
+      }
       const p = getPlayer(state, action.playerId);
       p.roles = p.roles.filter((r) => r !== action.role);
       break;
@@ -650,6 +777,9 @@ export function reduce(prev: GameState, action: Action): GameState {
       requireAdmin(state, action.playerId);
       requirePhase(state, 'LOBBY');
       if (state.teams.length < 1) throw new EngineError('At least one team must join before starting');
+      if (state.mode === 'solo' && !state.players.some((p) => p.roles.length > 0)) {
+        throw new EngineError('Pick at least one role to play before starting');
+      }
       state.month = 1;
       state.phase = 'FORECAST';
       log(state, `Game started with ${state.teams.length} team(s) for ${state.config.months} months.`);
@@ -904,6 +1034,12 @@ export function reduce(prev: GameState, action: Action): GameState {
       }
       const idx = PHASE_ORDER.indexOf(leaving);
       state.phase = PHASE_ORDER[idx + 1];
+      if (state.mode === 'solo' && state.phase === 'TRADING') {
+        // solo has no rival trades and no facilitator: orders split equally, so the month resolves now
+        resolveMonth(state);
+        state.phase = 'RESULTS';
+        break;
+      }
       if (state.phase === 'ORDERS') {
         state.proposedOrders = computeProposedOrders(state);
       }
@@ -916,5 +1052,6 @@ export function reduce(prev: GameState, action: Action): GameState {
     }
   }
 
+  if (state.mode === 'solo') automateRoles(state);
   return state;
 }

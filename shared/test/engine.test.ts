@@ -4,11 +4,13 @@ import {
   EngineError,
   GameConfig,
   GameState,
+  Role,
   buildDefaultConfig,
   createGame,
   priceFloor,
   reduce,
   referenceCost,
+  audienceFor,
   viewFor,
 } from '../src/index.ts';
 
@@ -598,5 +600,102 @@ describe('determinism & defaults', () => {
       // depreciating every month of the shelf life sums to the build cost
       expect(sku.ageLossCostPerUnitPerMonth * sku.shelfLifeMonths).toBeCloseTo(mfgCost, 1);
     }
+  });
+});
+
+describe('solo mode', () => {
+  const ALL_ROLES: Role[] = ['DEMAND_PLANNER', 'PRODUCTION_PLANNER', 'TRANSPORT_MANAGER', 'CUSTOMER_OPS', 'CEO'];
+
+  function soloLobby(roles: Role[] = ALL_ROLES, rivals = 2): GameState {
+    let s = createGame(testConfig(), 'SOLO12');
+    s = reduce(s, { type: 'JOIN', playerId: 'me', name: 'Sam', asAdmin: true });
+    return reduce(s, { type: 'SETUP_SOLO', playerId: 'me', teamName: 'Sam Co', roles, rivals });
+  }
+
+  it('creates the player team with the chosen roles, plus automated rivals', () => {
+    const s = soloLobby(['CEO'], 3);
+    expect(s.mode).toBe('solo');
+    expect(s.teams.map((t) => [t.name, t.bot === true])).toEqual([
+      ['Sam Co', false], ['Rival 1', true], ['Rival 2', true], ['Rival 3', true],
+    ]);
+    expect(s.players[0].teamId).toBe('T1');
+    expect(s.players[0].roles).toEqual(['CEO']);
+  });
+
+  it('validates the role picks and the number of rival teams', () => {
+    let s = createGame(testConfig(), 'SOLO12');
+    s = reduce(s, { type: 'JOIN', playerId: 'me', name: 'Sam', asAdmin: true });
+    const setup = (roles: Role[], rivals: number) =>
+      reduce(s, { type: 'SETUP_SOLO', playerId: 'me', teamName: 'X', roles, rivals });
+    expect(() => setup([], 2)).toThrow(EngineError);
+    expect(() => setup(ALL_ROLES, 0)).toThrow(EngineError);
+    expect(() => setup(ALL_ROLES, 6)).toThrow(EngineError);
+  });
+
+  it('the host gets their own team view, not the facilitator view', () => {
+    const s = soloLobby();
+    expect(audienceFor(s, 'me')).toBe('team:T1');
+    expect(viewFor(s, audienceFor(s, 'me')).myTeam?.name).toBe('Sam Co');
+  });
+
+  it('turns away other players, who would otherwise take a rival seat', () => {
+    expect(() =>
+      reduce(soloLobby(), { type: 'JOIN', playerId: 'stranger', name: 'Stu', asAdmin: false }),
+    ).toThrow(EngineError);
+  });
+
+  it('plays only the roles the player did not pick, and keeps the player out of them', () => {
+    let s = reduce(soloLobby(['DEMAND_PLANNER']), { type: 'START_GAME', playerId: 'me' });
+    expect(s.teams[0].decisions.forecast).toBeNull();
+    expect(s.teams[1].decisions.forecast).not.toBeNull();
+    s = reduce(s, { type: 'SUBMIT_FORECAST', playerId: 'me', forecast: { S1: 200, S2: 200 } });
+    s = reduce(s, { type: 'ADVANCE_PHASE', playerId: 'me' }); // -> PRODUCTION
+    expect(s.teams[1].decisions.production).not.toBeNull();
+    expect(() => reduce(s, { type: 'SUBMIT_PRODUCTION', playerId: 'me', allocations: [] })).toThrow(EngineError);
+  });
+
+  it('rival production respects line capacity and cash', () => {
+    let s = reduce(soloLobby(['CEO'], 2), { type: 'START_GAME', playerId: 'me' });
+    s = reduce(s, { type: 'ADVANCE_PHASE', playerId: 'me' }); // -> PRODUCTION
+    const rival = s.teams[1];
+    const plan = rival.decisions.production ?? [];
+    expect(plan.reduce((n, a) => n + a.qty, 0)).toBeGreaterThan(0);
+    for (const line of s.config.lines) {
+      const used = plan.filter((a) => a.lineId === line.id).reduce((n, a) => n + a.qty, 0);
+      expect(used).toBeLessThanOrEqual(line.capacityPerMonth);
+    }
+  });
+
+  it('plays a full three-month game with the player holding every role', () => {
+    let s = reduce(soloLobby(), { type: 'START_GAME', playerId: 'me' });
+    for (let m = 1; m <= 3; m++) {
+      s = reduce(s, { type: 'SUBMIT_FORECAST', playerId: 'me', forecast: { S1: 200, S2: 200 } });
+      s = reduce(s, { type: 'ADVANCE_PHASE', playerId: 'me' }); // -> PRODUCTION
+      s = reduce(s, {
+        type: 'SUBMIT_PRODUCTION', playerId: 'me',
+        allocations: [{ lineId: 'L1', skuId: 'S1', qty: 200 }, { lineId: 'L2', skuId: 'S2', qty: 200 }],
+      });
+      s = reduce(s, { type: 'ADVANCE_PHASE', playerId: 'me' }); // -> TRANSPORT
+      s = reduce(s, {
+        type: 'SUBMIT_TRANSPORT', playerId: 'me',
+        split: { S1: { truckload: 200, interplant: 0 }, S2: { truckload: 200, interplant: 0 } },
+      });
+      s = reduce(s, { type: 'ADVANCE_PHASE', playerId: 'me' }); // -> PRICING
+      s = reduce(s, { type: 'SUBMIT_PRICES', playerId: 'me', prices: { S1: 20, S2: 20 } });
+      s = reduce(s, { type: 'ADVANCE_PHASE', playerId: 'me' }); // resolves: no trading or orders step
+      expect(s.phase).toBe('RESULTS');
+      s = reduce(s, { type: 'ADVANCE_PHASE', playerId: 'me' });
+    }
+    expect(s.phase).toBe('GAME_OVER');
+    expect(s.teams.every((t) => t.results.length === 3)).toBe(true);
+    expect(s.teams.length).toBe(3);
+  });
+
+  it('splits the market equally between the player and the rivals', () => {
+    let s = reduce(soloLobby(['CEO'], 2), { type: 'START_GAME', playerId: 'me' });
+    for (let i = 0; i < 4; i++) s = reduce(s, { type: 'ADVANCE_PHASE', playerId: 'me' });
+    expect(s.phase).toBe('RESULTS');
+    // baseline 200/SKU, 3 teams: market 600, split 200 each
+    expect(s.teams.map((t) => t.results[0].bySku.S1.ordered)).toEqual([200, 200, 200]);
   });
 });
