@@ -94,7 +94,8 @@ export function SupplyMap() {
   const productionOn = phase === 'PRODUCTION';
   const transportOn = phase === 'TRANSPORT';
   const tradeOn = phase === 'TRADING';
-  const customerOn = phase === 'PRICING' || phase === 'ORDERS';
+  const pricingOn = phase === 'PRICING';
+  const customerOn = phase === 'ORDERS';
 
   return (
     <section className="smap" aria-label="Your supply network">
@@ -160,6 +161,16 @@ export function SupplyMap() {
               <Icon name="handshake" size={24} />
             </g>
             <text y="50" textAnchor="middle" className="smap-title">CEO trade desk</text>
+          </g>
+
+          {/* Customer Ops pricing desk: sets selling prices above the customers */}
+          <g className={`smap-trade${pricingOn ? ' on' : ''}`} transform="translate(800 46)">
+            <circle r="26" className="smap-trade-disc" />
+            {pricingOn && <circle r="26" className="smap-ring" />}
+            <g transform="translate(-12 -12)" className="smap-trade-icon">
+              <Icon name="tag" size={24} />
+            </g>
+            <text y="50" textAnchor="middle" className="smap-title">Customer Ops pricing</text>
           </g>
 
           {/* truckload: fast lane, arrives within a week */}
