@@ -226,6 +226,13 @@ function ProductionPanel() {
     .filter((a) => a.qty > 0);
   const commitment = productionCommitment(config, allocations);
   const overBudget = commitment > team.budget;
+  // transport is paid at the cheapest rate when the plan is checked, so that much cash is kept back
+  const minTransport = Math.min(config.transport.truckload.costPerUnit, config.transport.interplant.costPerUnit);
+  const unitsPlanned = allocations.reduce((s, a) => s + a.qty, 0);
+  const transportReserve = Math.round(unitsPlanned * minTransport * 100) / 100;
+  const leftForTransport = Math.round((team.budget - (commitment - transportReserve)) * 100) / 100;
+  const reserveFor = (plan: ProductionAllocation[]) =>
+    Math.round(plan.reduce((s, a) => s + a.qty, 0) * minTransport * 100) / 100;
   const [budgetPrompt, setBudgetPrompt] = useState<ProductionAllocation[] | null>(null);
   const realign = (fitted: ProductionAllocation[]) => {
     const next: Record<string, number> = {};
@@ -318,7 +325,11 @@ function ProductionPanel() {
       })}
       {budgetPrompt && (
         <div className="banner error budget-prompt" role="alertdialog" aria-label="Plan is over budget">
-          <b>This plan costs {fmtMoney(commitment)} and you have {fmtMoney(team.budget)} in cash.</b>
+          <b>
+            {leftForTransport < 0
+              ? `Production alone costs ${fmtMoney(commitment - transportReserve)}, more than your ${fmtMoney(team.budget)} in cash.`
+              : `Production would leave ${fmtMoney(leftForTransport)} of your ${fmtMoney(team.budget)} for transport, but ${fmtNum(unitsPlanned)} units need at least ${fmtMoney(transportReserve)}.`}
+          </b>
           <p className="sub" style={{ margin: 0 }}>
             Realigned, the plan makes {fmtNum(budgetPrompt.reduce((s, a) => s + a.qty, 0))} u for{' '}
             {fmtMoney(productionCommitment(config, budgetPrompt))}. Each line keeps its place in the order;
@@ -326,7 +337,7 @@ function ProductionPanel() {
           </p>
           <div className="row">
             <button className="primary" disabled={busy} onClick={() => realign(budgetPrompt)}>
-              Realign and submit
+              Keep {fmtMoney(reserveFor(budgetPrompt))} for transport and submit
             </button>
             <button disabled={busy} onClick={() => setBudgetPrompt(null)}>Edit my plan</button>
             <button disabled={busy}
@@ -343,7 +354,9 @@ function ProductionPanel() {
         }}>
           {submitted ? 'Update plan' : 'Submit plan'} — cost {fmtMoney(commitment)}
         </ConfirmButton>
-        {overBudget && <span className="badge bad">Over budget by {fmtMoney(commitment - team.budget)}</span>}
+        <span className={`badge${overBudget ? ' bad' : ''}`}>
+          Left for transport {fmtMoney(leftForTransport)} · needs {fmtMoney(transportReserve)}
+        </span>
         {submitted && <span className="badge good">✓ Submitted</span>}
         <span className="badge">Budget {fmtMoney(team.budget)}</span>
       </div>
