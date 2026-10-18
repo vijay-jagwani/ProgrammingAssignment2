@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from 'react';
+
 // Small theme-aware SVG charts following the dataviz reference palette:
 // thin marks, hairline grid, legend + direct labels, tooltips via <title>.
 
@@ -30,7 +32,15 @@ export function LineChart({
   height?: number;
   valueFmt?: (v: number) => string;
 }) {
-  const W = 560;
+  const ref = useRef<HTMLDivElement>(null);
+  const [W, setW] = useState(560);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => setW(Math.max(280, Math.round(entry.contentRect.width))));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const H = height;
   const padL = 44;
   const padR = 70; // room for direct labels
@@ -43,21 +53,33 @@ export function LineChart({
   const x = (i: number) =>
     padL + (labels.length <= 1 ? 0 : (i * (W - padL - padR)) / (labels.length - 1));
   const y = (v: number) => padT + (H - padT - padB) * (1 - (v - bottom) / (top - bottom));
+  // end-of-line series names, nudged apart so two close finishes stay readable
+  const endLabels = series
+    .flatMap((s) => {
+      let lastIdx = -1;
+      s.values.forEach((v, i) => { if (v != null) lastIdx = i; });
+      return lastIdx >= 0 ? [{ name: s.name, y: y(s.values[lastIdx]!) }] : [];
+    })
+    .sort((a, b) => a.y - b.y);
+  for (let i = 1; i < endLabels.length; i++) {
+    endLabels[i].y = Math.max(endLabels[i].y, endLabels[i - 1].y + 14);
+  }
+  const labelY = new Map(endLabels.map((e) => [e.name, e.y]));
 
   return (
-    <div>
+    <div ref={ref}>
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto' }} role="img">
         {ticks.map((t) => (
           <g key={t}>
             <line x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} stroke="var(--grid)" strokeWidth="1" />
-            <text x={padL - 6} y={y(t) + 4} textAnchor="end" fontSize="10" fill="var(--ink-3)">
+            <text x={padL - 6} y={y(t) + 4} textAnchor="end" fontSize="12" fill="var(--ink-3)">
               {Math.abs(t) >= 1000 ? `${t / 1000}k` : t}
             </text>
           </g>
         ))}
         <line x1={padL} x2={W - padR} y1={y(0)} y2={y(0)} stroke="var(--axis)" strokeWidth="1" />
         {labels.map((l, i) => (
-          <text key={i} x={x(i)} y={H - 6} textAnchor="middle" fontSize="10" fill="var(--ink-3)">
+          <text key={i} x={x(i)} y={H - 6} textAnchor="middle" fontSize="12" fill="var(--ink-3)">
             {l}
           </text>
         ))}
@@ -89,8 +111,8 @@ export function LineChart({
               {lastIdx >= 0 && (
                 <text
                   x={x(lastIdx) + 8}
-                  y={y(s.values[lastIdx]!) + 4}
-                  fontSize="11"
+                  y={(labelY.get(s.name) ?? 0) + 4}
+                  fontSize="12"
                   fill="var(--ink-2)"
                 >
                   {s.name}

@@ -19,7 +19,7 @@ export function AdminConsole() {
   if (!view) return null;
   return (
     <div>
-      <PhaseControl />
+      {view.phase !== 'ORDERS' && <PhaseControl />}
       {view.phase === 'ORDERS' && <OrdersDesk key={`o${view.month}`} />}
       {view.priceBoard && <PriceBoardCard />}
       <TeamsOverview />
@@ -154,10 +154,13 @@ function OrdersDesk() {
         </tbody>
       </table>
       <div className="row" style={{ marginTop: 12 }}>
-        <ConfirmButton disabled={busy} onConfirm={() => act({ type: 'SUBMIT_ORDERS', allocations: alloc })}>
+        <ConfirmButton className="" disabled={busy} onConfirm={() => act({ type: 'SUBMIT_ORDERS', allocations: alloc })}>
           Set orders
         </ConfirmButton>
-        {view!.submittedOrders && <span className="badge good">✓ Orders set — advance to resolve</span>}
+        <ConfirmButton disabled={busy} onConfirm={() => act({ type: 'ADVANCE_PHASE' })}>
+          Lock orders & resolve month
+        </ConfirmButton>
+        {view!.submittedOrders && <span className="badge good">✓ Orders set</span>}
         <span className="sub" style={{ fontSize: 12 }}>
           The Allocated column doesn't have to match the proposal — you're the customer.
         </span>

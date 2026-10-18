@@ -382,3 +382,8 @@ details.market summary .sub { margin: 0; font-weight: 400; }
   .hero h2 { font-size: 24px; }
   .start-card button.big { width: 100%; }
 }
+
+/* wide tables scroll inside themselves on phones instead of pushing the page */
+@media (max-width: 640px) {
+  table.data { display: block; overflow-x: auto; white-space: nowrap; }
+}
