@@ -461,3 +461,14 @@ details.market summary .sub { margin: 0; font-weight: 400; }
 @media (prefers-reduced-motion: reduce) {
   .smap-ring, .smap-road.active { animation: none; }
 }
+
+/* transport lanes, week chips, and the desks on the route to customers */
+.smap-road-link { fill: none; stroke: var(--grid); stroke-width: 22; stroke-linecap: round; }
+.week-pill rect { fill: var(--page); stroke: var(--axis); stroke-width: 1.5; }
+.week-pill text { font-size: 12px; font-weight: 650; fill: var(--ink-2); }
+.week-pill.on rect { fill: var(--accent); stroke: var(--accent); }
+.week-pill.on text { fill: var(--accent-ink); }
+.smap-desk-disc { fill: var(--surface-1); stroke: var(--ink-3); stroke-width: 2; }
+.smap-desk.on .smap-desk-disc { stroke: var(--accent); stroke-width: 3; }
+.smap-desk-icon { color: var(--ink-2); }
+.smap-desk.on .smap-desk-icon { color: var(--accent); }

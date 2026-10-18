@@ -4,16 +4,19 @@ import { useGame } from '../state';
 import { fmtMoney, fmtNum } from './ui';
 import { Icon } from './icons';
 
-// The supply network as a map: demand is agreed in a meeting, every production
-// line feeds one factory, two transport lanes (truckload and interplant) carry
-// the goods to customers. Trucks move while goods are moving.
+// The supply network as a map, in the order goods move:
+// demand meeting -> production lines -> one factory -> truckload or intermodal
+// -> Customer Ops (prices) -> CEO trade -> customers. Each part pulses while
+// the matching phase is being decided.
 
 const W = 900;
 const H = 440;
 const DEMAND = { x: 96, y: H / 2 };
 const LINE_X = 262;
 const FACTORY = { x: 432, y: H / 2 };
-const CUSTOMER = { x: 800, y: H / 2, r: 58 };
+const OPS = { x: 580, y: H / 2, r: 36 };
+const CEO = { x: 700, y: H / 2, r: 36 };
+const CUSTOMER = { x: 834, y: H / 2, r: 50 };
 
 const TRUCK = { x: -12, y: -7, w: 24, h: 14 };
 
@@ -48,11 +51,41 @@ function Factory({ x, y, scale = 1 }: { x: number; y: number; scale?: number }) 
     <g transform={scale === 1 ? undefined : `translate(${x} ${y}) scale(${scale}) translate(${-x} ${-y})`}>
       <rect x={x - 46} y={y - 30} width="92" height="62" rx="6" className="smap-factory" />
       <path d={`M ${x - 46} ${y - 30} L ${x - 20} ${y - 52} L ${x - 20} ${y - 30} L ${x + 6} ${y - 52} L ${x + 6} ${y - 30} L ${x + 32} ${y - 52} L ${x + 32} ${y - 30} L ${x + 46} ${y - 30}`} className="smap-factory-roof" />
-      <rect x={x + 26} y={y - 92} width="10" height="40" rx="2" className="smap-factory-stack" />
+      <rect x={x - 40} y={y - 92} width="10" height="40" rx="2" className="smap-factory-stack" />
       <rect x={x - 14} y={y - 14} width="28" height="46" rx="3" className="smap-factory-door" />
     </g>
   );
 }
+
+/** A round desk on the route: Customer Ops (prices) or the CEO (trade). */
+function Desk({ x, y, r, icon, on, label }: {
+  x: number; y: number; r: number; icon: 'tag' | 'handshake'; on: boolean; label: string;
+}) {
+  return (
+    <g className={`smap-desk${on ? ' on' : ''}`} transform={`translate(${x} ${y})`}>
+      <circle r={r} className="smap-desk-disc" />
+      {on && <circle r={r} className="smap-ring" />}
+      <g transform="translate(-12 -12)" className="smap-desk-icon">
+        <Icon name={icon} size={24} />
+      </g>
+      <text y={-r - 12} textAnchor="middle" className="smap-title">{label}</text>
+    </g>
+  );
+}
+
+/** Week chip on a transport lane: lit when that lane carries units. */
+function WeekPill({ x, y, weeks, units, lit }: { x: number; y: number; weeks: number; units: number; lit: boolean }) {
+  return (
+    <g className={`week-pill${lit ? ' on' : ''}`} transform={`translate(${x} ${y})`}>
+      <rect x="-96" y="-12" width="192" height="24" rx="12" />
+      <text y="4" textAnchor="middle">Week {weeks} · {fmtNum(units)} u</text>
+    </g>
+  );
+}
+
+// lanes leave the factory and end on the Customer Ops circle
+const TL_PATH = 'M 478 200 C 505 165, 530 180, 552 198';
+const IP_PATH = 'M 478 238 C 505 262, 530 262, 552 242';
 
 function lineY(i: number, n: number): number {
   const top = 60;
@@ -93,8 +126,8 @@ export function SupplyMap() {
   const demandOn = phase === 'FORECAST';
   const productionOn = phase === 'PRODUCTION';
   const transportOn = phase === 'TRANSPORT';
-  const tradeOn = phase === 'TRADING';
   const pricingOn = phase === 'PRICING';
+  const tradeOn = phase === 'TRADING';
   const customerOn = phase === 'ORDERS';
 
   return (
@@ -116,7 +149,7 @@ export function SupplyMap() {
       </div>
 
       <div className="smap-scroll">
-        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Demand meeting, production lines, factory, trade desk, truckload and interplant routes to customers">
+        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Demand meeting, production lines, factory, truckload or intermodal, Customer Ops, CEO trade, customers">
           <rect x="0" y="0" width={W} height={H} rx="22" className="smap-ground" />
 
           <RoundTable x={DEMAND.x} y={DEMAND.y} active={demandOn} />
@@ -153,54 +186,29 @@ export function SupplyMap() {
             {fmtNum(producedTotal)} u made · {fmtNum(onShelf)} on shelf · {fmtNum(inTransit)} in transit
           </text>
 
-          {/* CEO trade desk: sits above the factory-to-customer routes */}
-          <g className={`smap-trade${tradeOn ? ' on' : ''}`} transform="translate(600 46)">
-            <circle r="26" className="smap-trade-disc" />
-            {tradeOn && <circle r="26" className="smap-ring" />}
-            <g transform="translate(-12 -12)" className="smap-trade-icon">
-              <Icon name="handshake" size={24} />
-            </g>
-            <text y="50" textAnchor="middle" className="smap-title">CEO trade desk</text>
-          </g>
+          {/* the two transport options, both ending on Customer Ops */}
+          <path d={TL_PATH} className={`smap-road tl${transportOn ? ' active' : ''}`} />
+          <path d={TL_PATH} className="smap-road-line" />
+          <text x="540" y="118" textAnchor="middle" className="smap-lane">Truckload</text>
+          <WeekPill x={540} y={140} weeks={tlWeeks} units={truckload} lit={truckload > 0} />
+          {truckload > 0 && <Truck dur={2.2} path={TL_PATH} />}
 
-          {/* Customer Ops pricing desk: sets selling prices above the customers */}
-          <g className={`smap-trade${pricingOn ? ' on' : ''}`} transform="translate(800 46)">
-            <circle r="26" className="smap-trade-disc" />
-            {pricingOn && <circle r="26" className="smap-ring" />}
-            <g transform="translate(-12 -12)" className="smap-trade-icon">
-              <Icon name="tag" size={24} />
-            </g>
-            <text y="50" textAnchor="middle" className="smap-title">Customer Ops pricing</text>
-          </g>
+          <path d={IP_PATH} className={`smap-road ip${transportOn ? ' active' : ''}`} />
+          <path d={IP_PATH} className="smap-road-dash" />
+          <WeekPill x={540} y={318} weeks={ipWeeks} units={interplant} lit={interplant > 0} />
+          <text x="540" y="354" textAnchor="middle" className="smap-lane">Intermodal (interplant)</text>
+          {interplant > 0 && <Truck dur={4.6} path={IP_PATH} />}
 
-          {/* truckload: fast lane, arrives within a week */}
-          <path d={`M ${FACTORY.x + 46} ${FACTORY.y - 8} C 600 ${FACTORY.y - 40}, 640 ${CUSTOMER.y - 70}, ${CUSTOMER.x - 50} ${CUSTOMER.y - 40}`} className={`smap-road tl${transportOn ? ' active' : ''}`} />
-          <path d={`M ${FACTORY.x + 46} ${FACTORY.y - 8} C 600 ${FACTORY.y - 40}, 640 ${CUSTOMER.y - 70}, ${CUSTOMER.x - 50} ${CUSTOMER.y - 40}`} className="smap-road-line" />
-          <text x="590" y={FACTORY.y - 74} textAnchor="middle" className="smap-lane tl-text">
-            Truckload · {tlWeeks} week{tlWeeks === 1 ? '' : 's'} · {fmtNum(truckload)} u
-          </text>
-          {truckload > 0 && (
-            <Truck dur={2.2} path={`M ${FACTORY.x + 46} ${FACTORY.y - 8} C 600 ${FACTORY.y - 40}, 640 ${CUSTOMER.y - 70}, ${CUSTOMER.x - 50} ${CUSTOMER.y - 40}`} />
-          )}
-
-          {/* interplant: slower, cheaper lane */}
-          <path d={`M ${FACTORY.x + 46} ${FACTORY.y + 14} C 600 ${FACTORY.y + 50}, 640 ${CUSTOMER.y + 80}, ${CUSTOMER.x - 50} ${CUSTOMER.y + 40}`} className={`smap-road ip${transportOn ? ' active' : ''}`} />
-          <path d={`M ${FACTORY.x + 46} ${FACTORY.y + 14} C 600 ${FACTORY.y + 50}, 640 ${CUSTOMER.y + 80}, ${CUSTOMER.x - 50} ${CUSTOMER.y + 40}`} className="smap-road-dash" />
-          <text x="590" y={FACTORY.y + 104} textAnchor="middle" className="smap-lane ip-text">
-            Interplant · {ipWeeks} weeks · {fmtNum(interplant)} u
-          </text>
-          {interplant > 0 && (
-            <Truck dur={4.6} path={`M ${FACTORY.x + 46} ${FACTORY.y + 14} C 600 ${FACTORY.y + 50}, 640 ${CUSTOMER.y + 80}, ${CUSTOMER.x - 50} ${CUSTOMER.y + 40}`} />
-          )}
+          <Desk x={OPS.x} y={OPS.y} r={OPS.r} icon="tag" on={pricingOn} label="Customer Ops" />
+          <path d={`M ${OPS.x + OPS.r} ${OPS.y} L ${CEO.x - CEO.r} ${CEO.y}`} className="smap-road-link" />
+          <Desk x={CEO.x} y={CEO.y} r={CEO.r} icon="handshake" on={tradeOn} label="CEO trade" />
+          <path d={`M ${CEO.x + CEO.r} ${CEO.y} L ${CUSTOMER.x - CUSTOMER.r} ${CUSTOMER.y}`} className="smap-road-link" />
 
           <circle cx={CUSTOMER.x} cy={CUSTOMER.y} r={CUSTOMER.r} className={`smap-market${customerOn ? ' on' : ''}`} />
           {customerOn && <circle cx={CUSTOMER.x} cy={CUSTOMER.y} r={CUSTOMER.r} className="smap-ring" />}
           <text x={CUSTOMER.x} y={CUSTOMER.y - 4} textAnchor="middle" className="smap-title">Customers</text>
-          <text x={CUSTOMER.x} y={CUSTOMER.y + 16} textAnchor="middle" className="smap-sub">
-            {last ? `${fmtNum(sold)} of ${fmtNum(ordered)} sold` : 'first month ahead'}
-          </text>
           <text x={CUSTOMER.x} y={CUSTOMER.y + CUSTOMER.r + 22} textAnchor="middle" className="smap-sub">
-            last month
+            {last ? `last month: ${fmtNum(sold)} of ${fmtNum(ordered)} sold` : 'sales start next month'}
           </text>
         </svg>
       </div>
