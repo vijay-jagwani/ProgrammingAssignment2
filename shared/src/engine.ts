@@ -431,6 +431,9 @@ function automateRoles(state: GameState): void {
     if (state.phase === 'PRICING' && !claimed.has('CUSTOMER_OPS') && d.prices === null) {
       d.prices = autoPrices(state, team);
     }
+    if (state.phase === 'TRADING' && !claimed.has('CEO') && !d.tradingDone) {
+      d.tradingDone = true;
+    }
   }
 }
 
@@ -643,6 +646,54 @@ function resolveMonth(state: GameState): void {
   stepCustomerSim(state, simOrders);
   state.submittedOrders = null;
   state.proposedOrders = null;
+}
+
+/** Move the goods and the cash for an accepted offer, checking it still fits. */
+function settleTrade(state: GameState, offer: TradeOffer): void {
+  const buyer = getTeam(state, offer.buyerTeamId);
+  const seller = getTeam(state, offer.sellerTeamId);
+  const cost = offer.qty * offer.unitPrice;
+  if (tradableUnits(seller, offer.skuId) < offer.qty) {
+    throw new EngineError(
+      'The selling team no longer has enough units for this trade (shelf + this month\'s truckload)',
+    );
+  }
+  if (buyer.budget - cost < -state.config.overdraftLimit) {
+    throw new EngineError("The buyer can no longer afford this trade");
+  }
+  // take shelf stock first (FIFO), then units from this month's
+  // truckload plan — those are marked presold and never ship at resolve
+  const fromShelf = Math.min(inventoryUnits(seller, offer.skuId), offer.qty);
+  const batches = fromShelf > 0 ? takeFifo(seller, offer.skuId, fromShelf) : [];
+  const fromPlan = offer.qty - fromShelf;
+  if (fromPlan > 0) {
+    seller.presold = seller.presold ?? {};
+    seller.presold[offer.skuId] = (seller.presold[offer.skuId] ?? 0) + fromPlan;
+    batches.push({ qty: fromPlan, age: 0 });
+  }
+  addBatches(buyer, offer.skuId, batches);
+  buyer.budget = round2(buyer.budget - cost);
+  seller.budget = round2(seller.budget + cost);
+  offer.status = 'accepted';
+  const skuName = state.config.skus.find((s) => s.id === offer.skuId)?.name ?? offer.skuId;
+  log(state, `Trade: ${buyer.name} bought ${offer.qty} x ${skuName} from ${seller.name} at ${offer.unitPrice}/unit.`);
+}
+
+/** Rival teams are automated: they sell at or above their cost floor, when they have the stock and the buyer can pay. */
+function answerRivalOffer(state: GameState, offer: TradeOffer): void {
+  const seller = getTeam(state, offer.sellerTeamId);
+  const buyer = getTeam(state, offer.buyerTeamId);
+  const fits =
+    offer.unitPrice >= priceFloor(state, seller, offer.skuId) &&
+    tradableUnits(seller, offer.skuId) >= offer.qty &&
+    buyer.budget - offer.qty * offer.unitPrice >= -state.config.overdraftLimit;
+  if (fits) {
+    settleTrade(state, offer);
+  } else {
+    offer.status = 'rejected';
+    const skuName = state.config.skus.find((sku) => sku.id === offer.skuId)?.name ?? offer.skuId;
+    log(state, `${seller.name} declined ${offer.qty} x ${skuName} from ${buyer.name} at ${offer.unitPrice}/unit.`);
+  }
 }
 
 // ------------------------------------------------------------- reducer
@@ -892,6 +943,7 @@ export function reduce(prev: GameState, action: Action): GameState {
         awaiting: 'seller',
         note: action.note?.slice(0, 140),
       });
+      if (seller.bot) answerRivalOffer(state, state.tradeOffers[state.tradeOffers.length - 1]);
       break;
     }
 
@@ -910,33 +962,7 @@ export function reduce(prev: GameState, action: Action): GameState {
         offer.status = 'rejected';
         break;
       }
-      const buyer = getTeam(state, offer.buyerTeamId);
-      const seller = getTeam(state, offer.sellerTeamId);
-      const cost = offer.qty * offer.unitPrice;
-      if (tradableUnits(seller, offer.skuId) < offer.qty) {
-        throw new EngineError(
-          'The selling team no longer has enough units for this trade (shelf + this month\'s truckload)',
-        );
-      }
-      if (buyer.budget - cost < -state.config.overdraftLimit) {
-        throw new EngineError("The buyer can no longer afford this trade");
-      }
-      // take shelf stock first (FIFO), then units from this month's
-      // truckload plan — those are marked presold and never ship at resolve
-      const fromShelf = Math.min(inventoryUnits(seller, offer.skuId), offer.qty);
-      const batches = fromShelf > 0 ? takeFifo(seller, offer.skuId, fromShelf) : [];
-      const fromPlan = offer.qty - fromShelf;
-      if (fromPlan > 0) {
-        seller.presold = seller.presold ?? {};
-        seller.presold[offer.skuId] = (seller.presold[offer.skuId] ?? 0) + fromPlan;
-        batches.push({ qty: fromPlan, age: 0 });
-      }
-      addBatches(buyer, offer.skuId, batches);
-      buyer.budget = round2(buyer.budget - cost);
-      seller.budget = round2(seller.budget + cost);
-      offer.status = 'accepted';
-      const skuName = state.config.skus.find((s) => s.id === offer.skuId)?.name ?? offer.skuId;
-      log(state, `Trade: ${buyer.name} bought ${offer.qty} x ${skuName} from ${seller.name} at ${offer.unitPrice}/unit.`);
+      settleTrade(state, offer);
       break;
     }
 
@@ -1034,14 +1060,13 @@ export function reduce(prev: GameState, action: Action): GameState {
       }
       const idx = PHASE_ORDER.indexOf(leaving);
       state.phase = PHASE_ORDER[idx + 1];
-      if (state.mode === 'solo' && state.phase === 'TRADING') {
-        // solo has no rival trades and no facilitator: orders split equally, so the month resolves now
-        resolveMonth(state);
-        state.phase = 'RESULTS';
-        break;
-      }
       if (state.phase === 'ORDERS') {
         state.proposedOrders = computeProposedOrders(state);
+        if (state.mode === 'solo') {
+          // no facilitator in solo: orders split equally, so the month resolves now
+          resolveMonth(state);
+          state.phase = 'RESULTS';
+        }
       }
       break;
     }

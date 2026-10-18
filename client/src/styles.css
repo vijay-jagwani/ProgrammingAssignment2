@@ -403,7 +403,7 @@ details.market summary .sub { margin: 0; font-weight: 400; }
 .chip.good b { color: var(--delta-good); }
 .chip.bad b { color: var(--delta-bad); }
 .smap-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-.smap-scroll > svg { display: block; width: 100%; height: auto; min-width: 640px; }
+.smap-scroll > svg { display: block; height: auto; min-width: 640px; }
 .smap-ground { fill: var(--wash); }
 .smap-road { fill: none; stroke: var(--grid); stroke-width: 26; stroke-linecap: round; }
 .smap-road-line { fill: none; stroke: var(--surface-1); stroke-width: 2; stroke-dasharray: 8 10; stroke-linecap: round; opacity: 0.9; }
@@ -473,3 +473,6 @@ details.market summary .sub { margin: 0; font-weight: 400; }
 .smap-desk-icon { color: var(--ink-2); }
 .smap-desk.on .smap-desk-icon { color: var(--accent); }
 .price-sub { font-size: 11px; color: var(--ink-3); font-weight: 400; }
+
+/* keep the whole supply map in view on laptops and desktops */
+.smap-scroll > svg { width: min(100%, calc(44vh * 2.05)); margin: 0 auto; }

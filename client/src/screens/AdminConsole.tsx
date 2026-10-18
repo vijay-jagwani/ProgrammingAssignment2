@@ -48,10 +48,10 @@ export function PhaseControl() {
       <h2>{PHASE_LABELS[view.phase]} — month {view.month}</h2>
       <p className="sub">
         {solo && view.phase === 'PRICING'
-          ? 'Advancing locks your prices and resolves the month against the rival teams.'
+          ? 'Advancing locks your prices and opens trading with the rival teams.'
           : ADVANCE_HINT[phaseKey] ?? ''}
       </p>
-      {submittedFlag && !solo && (
+      {submittedFlag && (
         <div className="row" style={{ marginBottom: 10 }}>
           {view.teamsProgress.map((t) => (
             <span key={t.id} className={`badge${t.submitted[submittedFlag] ? ' good' : ''}`}>
@@ -62,7 +62,8 @@ export function PhaseControl() {
       )}
       <ConfirmButton disabled={busy} onConfirm={() => act({ type: 'ADVANCE_PHASE' })}>
         {view.phase === 'ORDERS' ? 'Lock orders & resolve month'
-          : solo && view.phase === 'PRICING' ? 'Lock prices & resolve month'
+          : solo && view.phase === 'PRICING' ? 'Lock prices & open trading'
+          : solo && view.phase === 'TRADING' ? 'Close trading & resolve month'
           : view.phase === 'RESULTS'
             ? view.month >= view.config.months ? 'Finish game' : `Start month ${view.month + 1}`
             : 'Advance phase'}

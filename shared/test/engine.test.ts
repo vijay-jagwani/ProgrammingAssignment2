@@ -682,7 +682,9 @@ describe('solo mode', () => {
       });
       s = reduce(s, { type: 'ADVANCE_PHASE', playerId: 'me' }); // -> PRICING
       s = reduce(s, { type: 'SUBMIT_PRICES', playerId: 'me', prices: { S1: 20, S2: 20 } });
-      s = reduce(s, { type: 'ADVANCE_PHASE', playerId: 'me' }); // resolves: no trading or orders step
+      s = reduce(s, { type: 'ADVANCE_PHASE', playerId: 'me' }); // -> TRADING
+      expect(s.phase).toBe('TRADING');
+      s = reduce(s, { type: 'ADVANCE_PHASE', playerId: 'me' }); // closes trading; orders resolve, no facilitator step
       expect(s.phase).toBe('RESULTS');
       s = reduce(s, { type: 'ADVANCE_PHASE', playerId: 'me' });
     }
@@ -693,7 +695,7 @@ describe('solo mode', () => {
 
   it('splits the market equally between the player and the rivals', () => {
     let s = reduce(soloLobby(['CEO'], 2), { type: 'START_GAME', playerId: 'me' });
-    for (let i = 0; i < 4; i++) s = reduce(s, { type: 'ADVANCE_PHASE', playerId: 'me' });
+    for (let i = 0; i < 5; i++) s = reduce(s, { type: 'ADVANCE_PHASE', playerId: 'me' });
     expect(s.phase).toBe('RESULTS');
     // baseline 200/SKU, 3 teams: market 600, split 200 each
     expect(s.teams.map((t) => t.results[0].bySku.S1.ordered)).toEqual([200, 200, 200]);
@@ -715,5 +717,43 @@ describe('trading availability', () => {
 
   it('hides availability before trading opens', () => {
     expect(viewFor(lobby(), 'admin').availability).toBeNull();
+  });
+});
+
+describe('solo trading with rival teams', () => {
+  function soloCeoLobby(): GameState {
+    let s = createGame(testConfig(), 'SOLO34');
+    s = reduce(s, { type: 'JOIN', playerId: 'me', name: 'Sam', asAdmin: true });
+    return reduce(s, { type: 'SETUP_SOLO', playerId: 'me', teamName: 'Sam Co', roles: ['CEO'], rivals: 2 });
+  }
+
+  function atTrading(): GameState {
+    let s = reduce(soloCeoLobby(), { type: 'START_GAME', playerId: 'me' });
+    for (let i = 0; i < 4; i++) s = reduce(s, { type: 'ADVANCE_PHASE', playerId: 'me' });
+    return s;
+  }
+
+  it('rivals are done trading as soon as the trading step opens', () => {
+    const s = atTrading();
+    expect(s.phase).toBe('TRADING');
+    expect(s.teams[1].decisions.tradingDone).toBe(true);
+  });
+
+  it('a rival sells at or above its cost floor', () => {
+    const s = atTrading();
+    const rival = s.teams[1];
+    const floor = priceFloor(s, rival, 'S1');
+    const after = reduce(s, { type: 'PROPOSE_TRADE', playerId: 'me', sellerTeamId: rival.id, skuId: 'S1', qty: 10, unitPrice: floor });
+    expect(after.tradeOffers.at(-1)?.status).toBe('accepted');
+    expect(after.teams[0].budget).toBeLessThan(s.teams[0].budget);
+    expect(after.teams[1].budget).toBeGreaterThan(s.teams[1].budget);
+  });
+
+  it('a rival declines a price below its cost floor', () => {
+    const s = atTrading();
+    const rival = s.teams[1];
+    const after = reduce(s, { type: 'PROPOSE_TRADE', playerId: 'me', sellerTeamId: rival.id, skuId: 'S1', qty: 10, unitPrice: 0.5 });
+    expect(after.tradeOffers.at(-1)?.status).toBe('rejected');
+    expect(after.teams[0].budget).toBe(s.teams[0].budget);
   });
 });

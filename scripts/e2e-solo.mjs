@@ -107,7 +107,9 @@ async function main() {
     await clickConfirm(sam, /^Advance phase$/); // -> PRICING (automated)
 
     await sam.getByText('the game plays Customer Ops Manager').waitFor();
-    await clickConfirm(sam, /Lock prices & resolve month/); // no trading, no orders step
+    await clickConfirm(sam, /Lock prices & open trading/); // -> TRADING
+    await sam.getByRole('button', { name: /Close trading & resolve month/ }).waitFor();
+    await clickConfirm(sam, /Close trading & resolve month/); // no facilitator orders step
 
     await sam.getByRole('button', { name: m < 3 ? `Start month ${m + 1}` : 'Finish game' }).waitFor();
     if (await sam.getByText('Customer orders — you are the market').count()) {
