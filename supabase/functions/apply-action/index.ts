@@ -36,14 +36,19 @@ function genCode(): string {
   return code;
 }
 
-async function syncDerived(admin: SupabaseClient, gameId: string, state: GameState) {
-  const playerRows = state.players.map((p) => ({
+const playerRowsFor = (gameId: string, state: GameState) =>
+  state.players.map((p) => ({
     id: p.id,
     game_id: gameId,
     name: p.name,
     audience: audienceFor(state, p.id),
   }));
-  if (playerRows.length) {
+
+async function syncDerived(admin: SupabaseClient, gameId: string, state: GameState, prev?: GameState) {
+  const playerRows = playerRowsFor(gameId, state);
+  // the player list only changes on join, team and kick actions: skip two round trips otherwise
+  const playersChanged = !prev || JSON.stringify(playerRowsFor(gameId, prev)) !== JSON.stringify(playerRows);
+  if (playerRows.length && playersChanged) {
     await admin.from('players').upsert(playerRows);
     // drop rows for kicked players so they lose read access to team views
     await admin
@@ -118,10 +123,12 @@ Deno.serve(async (req) => {
     }
 
     const code = String(body.code ?? '').toUpperCase().trim();
-    // a full room submits at once: retry lost races, with a short random pause
-    // so the retries don't collide again
-    for (let attempt = 0; attempt < 8; attempt++) {
-      if (attempt > 0) await new Promise((r) => setTimeout(r, 20 + Math.random() * 60 * attempt));
+    // a full room submits at once: retry lost races with a growing random pause
+    // (up to about 10 s in all) so 25+ simultaneous writers each get a turn
+    for (let attempt = 0; attempt < 12; attempt++) {
+      if (attempt > 0) {
+        await new Promise((r) => setTimeout(r, Math.random() * Math.min(1500, 40 * 2 ** attempt)));
+      }
       const { data: game } = await admin
         .from('games')
         .select('id, state, rev')
@@ -151,7 +158,7 @@ Deno.serve(async (req) => {
         .select('id');
       if (!updated?.length) continue; // concurrent write — reload and retry
 
-      await syncDerived(admin, game.id, state);
+      await syncDerived(admin, game.id, state, game.state as GameState);
       return json({
         code,
         gameId: game.id,

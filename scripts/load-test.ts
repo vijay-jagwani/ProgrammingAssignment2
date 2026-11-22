@@ -269,5 +269,7 @@ async function main() {
 
 main().catch((e) => {
   console.error('\nLoad test failed:', (e as Error).message);
+  console.error(`Before it stopped: ${latencies.length} requests; response time p50 ${pct(latencies, 50)} ms, ` +
+    `p95 ${pct(latencies, 95)} ms, max ${pct(latencies, 100)} ms; "Game is busy" answers ${busy}`);
   process.exitCode = 1;
 });
