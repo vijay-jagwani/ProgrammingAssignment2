@@ -96,6 +96,13 @@ export interface GameConfig {
   overdraftInterestRate: number; // monthly rate charged on a negative balance
   numCustomers: number; // how many "customer" admins the demand generator simulates
   maxTradePriceMultiplier: number; // trade unit price cap = multiplier x reference landed cost
+  // How strongly customers move volume toward cheaper teams: a team's share of a
+  // product is weighted by (market median price / its price) ^ priceSensitivity.
+  // Optional so games saved before it existed still load; defaults by difficulty.
+  priceSensitivity?: number;
+  // Monthly chance that a product's demand drops sharply, then springs back
+  // 2-3 months later. Optional; defaults by difficulty, and 0 when demandVolatility is 0.
+  demandShockChance?: number;
 }
 
 export interface PlayerInfo {

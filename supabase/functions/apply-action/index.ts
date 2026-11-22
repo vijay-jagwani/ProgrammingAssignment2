@@ -118,7 +118,10 @@ Deno.serve(async (req) => {
     }
 
     const code = String(body.code ?? '').toUpperCase().trim();
-    for (let attempt = 0; attempt < 3; attempt++) {
+    // a full room submits at once: retry lost races, with a short random pause
+    // so the retries don't collide again
+    for (let attempt = 0; attempt < 8; attempt++) {
+      if (attempt > 0) await new Promise((r) => setTimeout(r, 20 + Math.random() * 60 * attempt));
       const { data: game } = await admin
         .from('games')
         .select('id, state, rev')

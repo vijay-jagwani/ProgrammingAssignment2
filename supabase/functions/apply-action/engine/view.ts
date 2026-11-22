@@ -1,4 +1,4 @@
-import { tradableUnits } from './engine.ts';
+import { proposedAllocation, tradableUnits } from './engine.ts';
 import type {
   GameConfig,
   GameMode,
@@ -78,6 +78,9 @@ export interface GameView {
   proposedOrders: Record<string, number> | null;
   /** Admin only: the submitted per-team allocation (teamId -> sku -> qty). */
   submittedOrders: Record<string, Record<string, number>> | null;
+  /** Admin only, during orders: the engine's price-weighted split (teamId -> sku -> qty),
+   *  which is what the month resolves with if the facilitator sets nothing. */
+  suggestedOrders: Record<string, Record<string, number>> | null;
   /** Units each team can deliver right now (shelf plus truckload plan), per SKU.
    *  Shared with every audience during trading and orders. */
   availability: Record<string, Record<string, number>> | null;
@@ -157,6 +160,7 @@ export function viewFor(state: GameState, audience: Audience): GameView {
     orderHistory: flattenOrderHistory(state, myTeamId),
     proposedOrders: isAdmin ? state.proposedOrders : null,
     submittedOrders: isAdmin ? state.submittedOrders : null,
+    suggestedOrders: isAdmin && state.phase === 'ORDERS' ? proposedAllocation(state) : null,
     log: isAdmin ? state.log : null,
     monthSummary: state.phase === 'RESULTS'
       ? state.teams.flatMap((t) => {

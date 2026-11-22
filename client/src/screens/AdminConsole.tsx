@@ -13,7 +13,7 @@ const ADVANCE_HINT: Record<string, string> = {
   TRANSPORT: 'Unset transport defaults to truckload.',
   PRICING: 'Unset prices default to the cost floor. Advancing reveals the price board.',
   TRADING: 'Open trade offers expire.',
-  ORDERS: 'Advancing locks orders and resolves the month for every team.',
+  ORDERS: 'Advancing locks orders and resolves the month for every team. If you set none, the suggested split by price is used.',
   RESULTS: 'Moves to the next month (or ends the game after the final month).',
 };
 
@@ -82,16 +82,34 @@ function OrdersDesk() {
   const n = Math.max(1, teams.length);
   const proposed = view!.proposedOrders ?? {};
 
-  // teamId -> skuId -> qty; start from the submitted allocation if present,
-  // otherwise split the proposed market total equally across teams
-  const [alloc, setAlloc] = useState<Record<string, Record<string, number>>>(() => {
-    const init: Record<string, Record<string, number>> = {};
+  const equalSplit = () => {
+    const out: Record<string, Record<string, number>> = {};
     for (const t of teams) {
-      init[t.id] = {};
+      out[t.id] = {};
+      for (const s of skus) out[t.id][s.id] = Math.round((proposed[s.id] ?? s.historicalMonthlyDemand * n) / n);
+    }
+    return out;
+  };
+  // the engine's price-weighted split: what the month resolves with if nothing is set
+  const suggested = () => {
+    const out = equalSplit();
+    for (const t of teams) {
       for (const s of skus) {
-        init[t.id][s.id] =
-          view!.submittedOrders?.[t.id]?.[s.id] ??
-          Math.round((proposed[s.id] ?? s.historicalMonthlyDemand * n) / n);
+        const v = view!.suggestedOrders?.[t.id]?.[s.id];
+        if (v != null) out[t.id][s.id] = v;
+      }
+    }
+    return out;
+  };
+
+  // teamId -> skuId -> qty; start from the submitted allocation if present,
+  // otherwise from the suggested split
+  const [alloc, setAlloc] = useState<Record<string, Record<string, number>>>(() => {
+    const init = suggested();
+    for (const t of teams) {
+      for (const s of skus) {
+        const set = view!.submittedOrders?.[t.id]?.[s.id];
+        if (set != null) init[t.id][s.id] = set;
       }
     }
     return init;
@@ -110,65 +128,79 @@ function OrdersDesk() {
     <div className="card">
       <h2>Customer orders — you are the market</h2>
       <p className="sub">
-        The market wants <b>baseline × {n} team{n === 1 ? '' : 's'}</b> of each SKU (adjusted by
-        the shelf simulation: leftover stock lowers demand, stockouts raise it). Split each SKU's
-        demand across the teams — each team's price is shown, so you can <b>reward sharper prices
-        with more volume</b>. Splitting evenly reproduces identical orders for everyone.
+        The market wants <b>baseline × {n} team{n === 1 ? '' : 's'}</b> of each SKU, adjusted by
+        the shelf simulation (leftover stock lowers demand, missed deliveries raise it) and by
+        occasional slumps that rebound 2–3 months later. The table starts from the <b>suggested
+        split</b>: a team priced at the market median gets an equal share, cheaper teams get more
+        and dearer teams less. If you set nothing, the month resolves with this split.
       </p>
-      <table className="data">
-        <thead>
-          <tr>
-            <th>SKU</th>
-            <th className="num">Market demand</th>
-            {teams.map((t) => <th key={t.id} className="num">{t.name}</th>)}
-            <th className="num">Allocated</th>
-          </tr>
-        </thead>
-        <tbody>
-          {skus.map((s) => {
-            const total = rowTotal(s.id);
-            const market = proposed[s.id];
-            return (
-              <tr key={s.id}>
-                <td>{s.name}</td>
-                <td className="num">
-                  {market != null ? fmtNum(market) : fmtNum(s.historicalMonthlyDemand * n)}
-                  <div style={{ fontSize: 11, color: 'var(--ink-3, #8a97a0)' }}>
-                    last mo: {view!.orderHistory[view!.month - 1]?.[s.id] != null
-                      ? fmtNum(view!.orderHistory[view!.month - 1][s.id]) : '—'}
+      <div className="row" style={{ marginBottom: 10 }}>
+        <button className="small" disabled={busy} onClick={() => setAlloc(suggested())}>Use suggested split</button>
+        <button className="small" disabled={busy} onClick={() => setAlloc(equalSplit())}>Split equally</button>
+      </div>
+      <div className="table-scroll">
+        <table className="data orders-desk">
+          <thead>
+            <tr>
+              <th>Team</th>
+              {skus.map((s) => (
+                <th key={s.id} className="num">
+                  {s.name}
+                  <div className="price-sub">
+                    market {fmtNum(proposed[s.id] ?? s.historicalMonthlyDemand * n)}
+                    {view!.orderHistory[view!.month - 1]?.[s.id] != null &&
+                      ` · last ${fmtNum(view!.orderHistory[view!.month - 1][s.id])}`}
                   </div>
-                </td>
-                {teams.map((t) => {
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {teams.map((t) => (
+              <tr key={t.id}>
+                <td>{t.name}</td>
+                {skus.map((s) => {
                   const p = priceOf(t.id, s.id);
                   return (
-                    <td key={t.id} className="num">
+                    <td key={s.id} className="num">
                       <NumInput value={alloc[t.id]?.[s.id] ?? 0}
-                        softCap={s.historicalMonthlyDemand * 3} width={86}
+                        softCap={Math.max(s.historicalMonthlyDemand * 3, proposed[s.id] ?? 0)} width={76}
                         onChange={(v) => setCell(t.id, s.id, v)} />
-                      <div style={{ fontSize: 11, color: 'var(--ink-3, #8a97a0)' }}>
+                      <div className="price-sub">
                         {p != null ? `@ ${fmtMoney(p)}` : 'no price'}
                         {' · '}{fmtNum(availableUnits(t.id, s.id))} avail
                       </div>
                     </td>
                   );
                 })}
-                <td className="num">
-                  <span className={`badge${market != null && total !== market ? '' : ' on'}`}>
-                    {fmtNum(total)}
-                  </span>
-                </td>
               </tr>
-            );
-          })}
-        </tbody>
-      </table>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr>
+              <th>Allocated</th>
+              {skus.map((s) => {
+                const total = rowTotal(s.id);
+                const market = proposed[s.id];
+                return (
+                  <td key={s.id} className="num">
+                    <span className={`badge${market != null && total !== market ? '' : ' on'}`}>
+                      {fmtNum(total)}
+                    </span>
+                  </td>
+                );
+              })}
+            </tr>
+          </tfoot>
+        </table>
+      </div>
       <div className="row" style={{ marginTop: 12 }}>
         <ConfirmButton className="" disabled={busy} onConfirm={() => act({ type: 'SUBMIT_ORDERS', allocations: alloc })}>
           Set orders
         </ConfirmButton>
         {view!.submittedOrders && <span className="badge good">✓ Orders set</span>}
         <span className="sub" style={{ fontSize: 12 }}>
-          The Allocated column doesn't have to match the proposal — you're the customer.
+          Totals don't have to match the market figure — you're the customer.
         </span>
       </div>
     </div>
@@ -221,6 +253,7 @@ function TradesCard() {
     <div className="card">
       <h3>Trades (all teams)</h3>
       {offers.length === 0 ? <p className="sub">No trade offers yet.</p> : (
+        <div className="table-scroll">
         <table className="data">
           <thead><tr><th>M</th><th>Deal</th><th className="num">Total</th><th>Status</th></tr></thead>
           <tbody>
@@ -236,6 +269,7 @@ function TradesCard() {
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   );

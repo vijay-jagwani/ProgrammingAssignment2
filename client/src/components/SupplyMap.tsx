@@ -23,6 +23,8 @@ const IP_PATH = 'M 352 108 C 420 160, 480 160, 544 116';
 // market view size
 const W = 900;
 const H = 440;
+// above this many teams the market view switches from a drawing to a grid of tiles
+const MAX_DRAWN_FACTORIES = 6;
 
 const TRUCK = { x: -12, y: -7, w: 24, h: 14 };
 
@@ -232,6 +234,47 @@ export function MarketMap() {
   const rowY = (i: number) => (n === 1 ? H / 2 : 96 + (i * (H - 190)) / (n - 1));
   const CX = 760;
   const CY = H / 2;
+
+  // past a handful of teams one column of factories overlaps: show a grid of tiles instead
+  if (n > MAX_DRAWN_FACTORIES) {
+    return (
+      <section className="smap" aria-label="Market: every factory and the customers it sells to">
+        <div className="smap-head">
+          <div>
+            <span className="kicker">Market</span>
+            <h3>Customers buy from every factory</h3>
+          </div>
+          <div className="smap-stats">
+            <span className="chip">{n} factories</span>
+            <span className="chip">Ordered <b>{fmtNum(total)} u</b></span>
+          </div>
+        </div>
+        <div className="market-grid">
+          <ul className="market-tiles">
+            {rows.map(({ team, units }) => (
+              <li key={team.id} className="market-tile">
+                <svg viewBox="-50 -96 100 132" className="market-tile-icon" aria-hidden="true">
+                  <Factory x={0} y={0} />
+                </svg>
+                <div className="market-tile-text">
+                  <b>{team.name}</b>
+                  <span>{fmtNum(units)} u ordered</span>
+                  <span className="market-tile-bar"><span style={{ width: `${(units / maxUnits) * 100}%` }} /></span>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <div className="market-customers" aria-label="Customers">
+            <span className="market-arrow" aria-hidden="true">→</span>
+            <div className="market-customers-disc">
+              <b>Customers</b>
+              <span>{fmtNum(total)} u</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="smap" aria-label="Market: every factory and the customers it sells to">

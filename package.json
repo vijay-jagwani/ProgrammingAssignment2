@@ -15,7 +15,8 @@
     "e2e": "node scripts/e2e.mjs",
     "e2e:live": "node scripts/e2e-live.mjs",
     "e2e:tabs": "node scripts/e2e-tabs.mjs",
-    "e2e:solo": "node scripts/e2e-solo.mjs"
+    "e2e:solo": "node scripts/e2e-solo.mjs",
+    "load-test": "tsx scripts/load-test.ts"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

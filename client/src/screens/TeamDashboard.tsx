@@ -488,7 +488,8 @@ function PricingPanel() {
       <h2>Set selling prices — month {view!.month}</h2>
       <p className="sub">
         The floor is your landed cost (production + transport + a month of holding). All teams'
-        prices go on the board next phase — but remember: demand is fixed, price is margin.
+        prices go on the board next phase. Customers split each product's demand by price: at the
+        market median you get an equal share, cheaper wins more volume, dearer risks the sale.
       </p>
       <table className="data">
         <thead>

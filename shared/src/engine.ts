@@ -198,10 +198,60 @@ export function priceFloor(state: GameState, team: TeamState, skuId: string): nu
 
 // ----------------------------------------------------- demand generation
 
+// the profit-maximising markup over cost is about k / (k - 1): 1.5x on easy, 1.33x on medium, 1.25x on hard
+const PRICE_SENSITIVITY: Record<GameConfig['difficulty'], number> = { easy: 3, medium: 4, hard: 5 };
+const DEMAND_SHOCK_CHANCE: Record<GameConfig['difficulty'], number> = { easy: 0.05, medium: 0.1, hard: 0.15 };
+
+function priceSensitivity(config: GameConfig): number {
+  return config.priceSensitivity ?? PRICE_SENSITIVITY[config.difficulty] ?? 2;
+}
+
+function demandShockChance(config: GameConfig): number {
+  if (config.demandShockChance !== undefined) return config.demandShockChance;
+  return config.demandVolatility > 0 ? DEMAND_SHOCK_CHANCE[config.difficulty] ?? 0 : 0;
+}
+
+export interface DemandShock {
+  skuId: string;
+  /** Month the market stops buying most of this product. */
+  lullMonth: number;
+  /** Share of normal demand that month (0.1 to 0.4). */
+  depth: number;
+  /** Month the held-back demand comes back, 2 or 3 months later. */
+  spikeMonth: number;
+  /** Demand multiplier that month: the lost demand returns, plus up to half again. */
+  spikeFactor: number;
+}
+
+/** Seeded slumps and rebounds for one product. Never in month 1, so the game starts at baseline. */
+export function demandShocks(config: GameConfig, skuId: string): DemandShock[] {
+  const chance = demandShockChance(config);
+  const shocks: DemandShock[] = [];
+  if (chance <= 0) return shocks;
+  for (let m = 2; m <= config.months; m++) {
+    if (rand01(config.seed, 'lull', skuId, m) >= chance) continue;
+    const depth = round2(0.1 + 0.3 * rand01(config.seed, 'lull-depth', skuId, m));
+    const gap = 2 + Math.floor(rand01(config.seed, 'lull-gap', skuId, m) * 2);
+    const spikeFactor = round2(1 + (1 - depth) * (1 + 0.5 * rand01(config.seed, 'spike', skuId, m)));
+    shocks.push({ skuId, lullMonth: m, depth, spikeMonth: m + gap, spikeFactor });
+  }
+  return shocks;
+}
+
+/** This month's demand multiplier for a product from its slumps and rebounds (1 = normal). */
+export function demandFactor(config: GameConfig, skuId: string, month: number): number {
+  let factor = 1;
+  for (const s of demandShocks(config, skuId)) {
+    if (s.lullMonth === month) factor *= s.depth;
+    if (s.spikeMonth === month) factor *= s.spikeFactor;
+  }
+  return factor;
+}
+
 /** Seeded per-customer sell-through for a month. Identical for every team. */
 function customerSales(config: GameConfig, skuId: string, month: number, customerIdx: number): number {
   const sku = config.skus.find((s) => s.id === skuId)!;
-  const target = sku.historicalMonthlyDemand / config.numCustomers;
+  const target = (sku.historicalMonthlyDemand / config.numCustomers) * demandFactor(config, skuId, month);
   const u = rand01(config.seed, 'sales', skuId, month, customerIdx) * 2 - 1;
   return Math.max(0, Math.round(target * (1 + config.demandVolatility * u)));
 }
@@ -219,7 +269,8 @@ export function computeProposedOrders(state: GameState): Record<string, number> 
   const numTeams = Math.max(1, state.teams.length);
   const proposal: Record<string, number> = {};
   for (const sku of config.skus) {
-    const target = sku.historicalMonthlyDemand / config.numCustomers;
+    const target =
+      (sku.historicalMonthlyDemand / config.numCustomers) * demandFactor(config, sku.id, state.month);
     let total = 0;
     for (let c = 0; c < config.numCustomers; c++) {
       if (state.month <= 1) {
@@ -251,15 +302,45 @@ export function splitEqually(
   return alloc;
 }
 
-/** Advance the customer shelf simulation once realized orders are known. */
-function stepCustomerSim(state: GameState, orders: Record<string, number>): void {
+/** A team's price for a product this month: what Customer Ops set, else its cost floor. */
+function teamPrice(state: GameState, team: TeamState, skuId: string): number {
+  return team.decisions.prices?.[skuId] ?? priceFloor(state, team, skuId);
+}
+
+/**
+ * The engine's suggested split of market demand across teams. A team priced at
+ * the market median gets an equal share; cheaper teams win more volume and
+ * dearer ones lose it, weighted by (median price / team price) ^ sensitivity.
+ * Identical prices give an equal split.
+ */
+export function proposedAllocation(state: GameState): Record<string, Record<string, number>> {
+  const totals = state.proposedOrders ?? computeProposedOrders(state);
+  const k = priceSensitivity(state.config);
+  const alloc: Record<string, Record<string, number>> = Object.fromEntries(state.teams.map((t) => [t.id, {}]));
+  for (const sku of state.config.skus) {
+    const prices = state.teams.map((t) => teamPrice(state, t, sku.id));
+    const sorted = [...prices].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    const median = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+    const weights = prices.map((p) => (p > 0 && median > 0 ? Math.pow(median / p, k) : 1));
+    const sumW = weights.reduce((a, w) => a + w, 0) || 1;
+    state.teams.forEach((t, i) => {
+      alloc[t.id][sku.id] = Math.round(((totals[sku.id] ?? 0) * weights[i]) / sumW);
+    });
+  }
+  return alloc;
+}
+
+/** Advance the customer shelf simulation with what teams actually delivered. */
+function stepCustomerSim(state: GameState, delivered: Record<string, number>): void {
   const { config } = state;
   while (state.customerSim.shelves.length < config.numCustomers) {
     state.customerSim.shelves.push({});
     state.customerSim.unmet.push({});
   }
   for (const sku of config.skus) {
-    const perCustomer = (orders[sku.id] ?? 0) / config.numCustomers;
+    // undelivered orders leave shelves short, so unmet demand returns next month
+    const perCustomer = (delivered[sku.id] ?? 0) / config.numCustomers;
     for (let c = 0; c < config.numCustomers; c++) {
       const shelf = state.customerSim.shelves[c][sku.id] ?? 0;
       const potential = customerSales(config, sku.id, state.month, c);
@@ -481,11 +562,10 @@ function validateProduction(state: GameState, team: TeamState, allocations: Prod
 function resolveMonth(state: GameState): void {
   const { config } = state;
   // Per-team allocation of market demand; when the admin didn't submit one,
-  // the proposed total is split equally (identical orders for every team).
-  const alloc =
-    state.submittedOrders ??
-    splitEqually(state, state.proposedOrders ?? computeProposedOrders(state));
+  // the engine splits it by price (equal shares when prices are equal).
+  const alloc = state.submittedOrders ?? proposedAllocation(state);
   state.orderHistory[state.month] = alloc;
+  const deliveredTotal: Record<string, number> = {};
 
   for (const team of state.teams) {
     const d = team.decisions;
@@ -574,6 +654,7 @@ function resolveMonth(state: GameState): void {
       } satisfies SkuMonthOutcome;
       orderedTotal += ordered;
       fulfilledTotal += fulfilled;
+      deliveredTotal[sku.id] = (deliveredTotal[sku.id] ?? 0) + fulfilled;
     }
     result.fillRate = orderedTotal > 0 ? fulfilledTotal / orderedTotal : 1;
 
@@ -636,15 +717,12 @@ function resolveMonth(state: GameState): void {
   }
 
   // The shelf simulation tracks a per-team-equivalent slice of the market:
-  // feed it the average allocation so bullwhip dynamics stay scale-free.
+  // feed it the average DELIVERED quantity, so stockouts leave shelves short
+  // and the unmet demand comes back in next month's orders (bullwhip).
   const n = Math.max(1, state.teams.length);
-  const simOrders: Record<string, number> = {};
-  for (const perTeam of Object.values(alloc)) {
-    for (const [skuId, qty] of Object.entries(perTeam)) {
-      simOrders[skuId] = (simOrders[skuId] ?? 0) + qty / n;
-    }
-  }
-  stepCustomerSim(state, simOrders);
+  const simDelivered: Record<string, number> = {};
+  for (const [skuId, qty] of Object.entries(deliveredTotal)) simDelivered[skuId] = qty / n;
+  stepCustomerSim(state, simDelivered);
   state.submittedOrders = null;
   state.proposedOrders = null;
 }
@@ -1099,9 +1177,11 @@ export function reduce(prev: GameState, action: Action): GameState {
         for (const sku of state.config.skus) {
           const v = perTeam[sku.id] ?? 0;
           if (!Number.isFinite(v) || v < 0) throw new EngineError('Orders must be non-negative numbers');
-          if (v > sku.historicalMonthlyDemand * 10) {
+          // typo guard: one team's order may reach the whole market, but not far beyond it
+          const limit = Math.max(sku.historicalMonthlyDemand * 10, (state.proposedOrders?.[sku.id] ?? 0) * 2);
+          if (v > limit) {
             throw new EngineError(
-              `${team.name}'s order for ${sku.name} is more than 10x the baseline — please double-check`,
+              `${team.name}'s order for ${sku.name} is far above the market's demand — please double-check`,
             );
           }
           alloc[team.id][sku.id] = Math.round(v);
@@ -1144,6 +1224,16 @@ export function reduce(prev: GameState, action: Action): GameState {
       state.phase = PHASE_ORDER[idx + 1];
       if (state.phase === 'ORDERS') {
         state.proposedOrders = computeProposedOrders(state);
+        for (const sku of state.config.skus) {
+          for (const s of demandShocks(state.config, sku.id)) {
+            if (s.lullMonth === state.month) {
+              log(state, `Market: ${sku.name} demand slumps to ${Math.round(s.depth * 100)}% this month; it returns in month ${s.spikeMonth}.`);
+            }
+            if (s.spikeMonth === state.month) {
+              log(state, `Market: ${sku.name} demand rebounds to ${Math.round(s.spikeFactor * 100)}% this month after the month-${s.lullMonth} slump.`);
+            }
+          }
+        }
         if (state.mode === 'solo') {
           // no facilitator in solo: orders split equally, so the month resolves now
           resolveMonth(state);

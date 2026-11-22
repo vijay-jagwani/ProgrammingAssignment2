@@ -7,6 +7,8 @@ import {
   Role,
   buildDefaultConfig,
   createGame,
+  demandFactor,
+  demandShocks,
   fitProductionToBudget,
   priceFloor,
   productionCommitment,
@@ -502,10 +504,15 @@ describe('demand generation', () => {
     expect(JSON.stringify(run('seed-A'))).not.toEqual(JSON.stringify(run('seed-B')));
   });
 
-  it('steady state: with zero volatility, customer orders stay at baseline', () => {
+  const fullProduction = [
+    { lineId: 'L1', skuId: 'S1', qty: 200 },
+    { lineId: 'L2', skuId: 'S2', qty: 200 },
+  ];
+
+  it('steady state: with zero volatility and full deliveries, customer orders stay at baseline', () => {
     const cfg = testConfig();
     let s = reduce(lobby(cfg), { type: 'START_GAME', playerId: 'adm' });
-    s = playMonth(s, { orders: { S1: 200, S2: 200 } });
+    s = playMonth(s, { aProd: fullProduction, bProd: fullProduction, orders: { S1: 200, S2: 200 } });
     s = reduce(s, { type: 'ADVANCE_PHASE', playerId: 'adm' });
     // advance to ORDERS to see the proposal
     s = apply(s, [
@@ -518,6 +525,60 @@ describe('demand generation', () => {
     expect(s.phase).toBe('ORDERS');
     // proposal is the TOTAL market pool: per-team baseline x 2 teams
     expect(s.proposedOrders).toEqual({ S1: 400, S2: 400 });
+  });
+
+  it('stockouts come back as extra orders next month', () => {
+    let s = reduce(lobby(testConfig()), { type: 'START_GAME', playerId: 'adm' });
+    // nobody produces: 400 of each product ordered, nothing delivered
+    s = playMonth(s, { orders: { S1: 200, S2: 200 } });
+    s = apply(s, Array.from({ length: 6 }, () => ({ type: 'ADVANCE_PHASE', playerId: 'adm' }) as Action));
+    expect(s.phase).toBe('ORDERS');
+    // each customer wanted 100 per team-slice, got 0: next month's orders double
+    expect(s.proposedOrders).toEqual({ S1: 800, S2: 800 });
+  });
+
+  it('default split rewards the cheaper team and is equal when prices match', () => {
+    let s = reduce(lobby(testConfig({ priceSensitivity: 2 })), { type: 'START_GAME', playerId: 'adm' });
+    s = playMonth(s, {
+      aProd: fullProduction, bProd: fullProduction,
+      aPrices: { S1: 30, S2: 20 }, bPrices: { S1: 15, S2: 20 },
+    });
+    // S1: median 22.5 -> weights (22.5/30)^2 = 0.5625 and (22.5/15)^2 = 2.25, of 400 units
+    expect(s.teams[0].results[0].bySku.S1.ordered).toBe(80);
+    expect(s.teams[1].results[0].bySku.S1.ordered).toBe(320);
+    // S2: same price -> equal split
+    expect(s.teams[0].results[0].bySku.S2.ordered).toBe(200);
+    expect(s.teams[1].results[0].bySku.S2.ordered).toBe(200);
+  });
+
+  it('facilitator orders still override the suggested split', () => {
+    let s = reduce(lobby(testConfig({ priceSensitivity: 2 })), { type: 'START_GAME', playerId: 'adm' });
+    s = playMonth(s, {
+      aPrices: { S1: 30, S2: 20 }, bPrices: { S1: 15, S2: 20 },
+      allocations: { T1: { S1: 300, S2: 0 }, T2: { S1: 100, S2: 0 } },
+    });
+    expect(s.teams[0].results[0].bySku.S1.ordered).toBe(300);
+  });
+
+  it('product slumps rebound 2-3 months later and never hit month 1', () => {
+    const cfg = buildDefaultConfig({ seed: 'shock-seed', months: 24, numSkus: 5, difficulty: 'hard', numCustomers: 3 });
+    const shocks = cfg.skus.flatMap((sku) => demandShocks(cfg, sku.id));
+    expect(shocks.length).toBeGreaterThan(0);
+    for (const sh of shocks) {
+      expect(sh.lullMonth).toBeGreaterThanOrEqual(2);
+      expect([2, 3]).toContain(sh.spikeMonth - sh.lullMonth);
+      expect(sh.depth).toBeGreaterThanOrEqual(0.1);
+      expect(sh.depth).toBeLessThanOrEqual(0.4);
+      // the held-back demand returns in full, plus up to half again
+      expect(sh.spikeFactor).toBeGreaterThanOrEqual(1 + (1 - sh.depth) - 0.01);
+    }
+    expect(demandShocks(cfg, 'S1')).toEqual(demandShocks(cfg, 'S1'));
+    for (const sku of cfg.skus) expect(demandFactor(cfg, sku.id, 1)).toBe(1);
+  });
+
+  it('a calm market (zero volatility) has no slumps', () => {
+    const cfg = testConfig();
+    expect(cfg.skus.flatMap((sku) => demandShocks(cfg, sku.id))).toEqual([]);
   });
 });
 
